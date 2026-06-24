@@ -119,10 +119,12 @@ bool SEN0626Sensor::read() {
   uint8_t cy = (uint8_t)((uint32_t)faceY * 255 / NATIVE_H);
 
   face.box_confidence = (uint8_t)(score * 255 / 100);
-  face.box_left   = (cx > BOX_HALF) ? cx - BOX_HALF : 0;
-  face.box_right  = (cx + BOX_HALF < 255) ? cx + BOX_HALF : 255;
-  face.box_top    = (cy > BOX_HALF) ? cy - BOX_HALF : 0;
-  face.box_bottom = (cy + BOX_HALF < 255) ? cy + BOX_HALF : 255;
+  // SEN0626 reports a face center, not a true bounding box. Store that center
+  // in both edges so consumers recover the exact target even at frame edges.
+  face.box_left = cx;
+  face.box_right = cx;
+  face.box_top = cy;
+  face.box_bottom = cy;
   face.id_confidence = 0;
   face.id = 0;
   face.is_facing = 1;

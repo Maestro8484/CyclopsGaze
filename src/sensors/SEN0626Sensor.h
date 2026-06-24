@@ -50,8 +50,6 @@ private:
   static constexpr long SAMPLE_TIME_MS = 150;
   static constexpr uint16_t NATIVE_W = 640;
   static constexpr uint16_t NATIVE_H = 480;
-  static constexpr uint8_t BOX_HALF = 32;
-
   HardwareSerial &serial;
   bool present{false};
   int8_t num_faces{0};
