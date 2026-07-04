@@ -1,16 +1,23 @@
 # CyclopsGaze
 
-Standalone single-eye animatronic face-tracking testbed.
+Standalone single-eye animatronic face-tracking testbed **and the durable IRIS gaze-node repo**.
 
-Teensy 4.0 + GC9A01A 240x240 round display + DFRobot SEN0626 AI camera.
+Teensy 4.1 + GC9A01A 240x240 round display + DFRobot SEN0626 AI camera.
 SEN0626 driven via Modbus RTU over UART1 with a drop-in shim matching the Useful Sensors
 Person Sensor (SEN-21231) interface used in the IRIS project.
 
 ## Purpose
 
 Testbed for validating SEN0626 as a replacement for the unreliable/EOL
-SEN-21231 before deploying to IRIS-Robot-Face. Upgrades to Teensy 4.1
-when hardware arrives.
+SEN-21231 before deploying to IRIS-Robot-Face. Runs on Teensy 4.1 as of CG-S2
+(migrated from T4.0 when the T4.1 arrived 2026-07-03).
+
+**This is the surviving gaze-node design.** As of 2026-07-04 (IRIS HANDOFF C) CyclopsGaze
+is the durable gaze-node identity; the earlier ESP32-S3 + OV2640 camera node (`../OGLE`) is
+archived/tombstoned (it never reached reliable end-to-end tracking). The IRIS integration is
+a **native Person-Sensor-bus drop-in** — the SEN0626 shim is read directly by IRIS's own
+Teensy 4.1, not via a Pi4 bridge. Full plan: [09_IRIS_INTEGRATION_PLAN.md](09_IRIS_INTEGRATION_PLAN.md).
+History: [CHANGELOG.md](CHANGELOG.md). Current bench status: [NOTES.md](NOTES.md).
 
 ## Wiring
 
