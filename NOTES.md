@@ -18,19 +18,26 @@ Registers (input, FC04):
   0x07 = face_score  (0-100)
 
 No bounding box: SEN0626 returns face CENTER (X, Y), not a box.
-Shim constructs fake box: cx±32 (0-255 remapped), cy±32. This gives correct
-tracking center regardless of fake box size.
+Shim stores the SAME center in BOTH edges (box_left==box_right==cx,
+box_top==box_bottom==cy) so IRIS-side consumers recover the exact target
+center even at frame edges. (Superseded the earlier cx±32 fake-box scheme —
+the b84033d "center box" fix commit; a fake width biased the recovered
+center near the edges.)
 
 No is_facing field: always set is_facing=1 in shim.
+  KNOWN GAP: the real Person Sensor is_facing (is_looking_at) drives IRIS
+  facing-gate logic. SEN0626 has no direct equivalent here; hardcoded true
+  means "facing" is always asserted. If IRIS integration (HANDOFF C) needs a
+  real facing flag, derive it from SEN0626 head-pose/gesture registers.
 
-Coordinate remap:
-  native_width  = 640
-  native_height = 480 (ASSUMED — confirm on bench)
-  cx255 = faceX * 255 / 640
-  cy255 = faceY * 255 / 480
-  box_left = cx255 - 32,  box_right = cx255 + 32
-  box_top  = cy255 - 32,  box_bottom = cy255 + 32
-  box_confidence = score * 255 / 100
+Coordinate remap (matches SEN0626Sensor.cpp read()):
+  NATIVE_W = 640
+  NATIVE_H = 480 (ASSUMED — confirm on bench)
+  cx = faceX * 255 / 640   (clamped faceX<=640)
+  cy = faceY * 255 / 480   (clamped faceY<=480)
+  box_left = box_right = cx
+  box_top  = box_bottom = cy
+  box_confidence = score * 255 / 100   (score clamped 0-100)
 
 Modbus multi-register read: registers 0x04-0x07 read in one FC04 transaction
 (4 registers contiguous), ~22ms per read at 9600 baud. SAMPLE_TIME_MS = 150.
@@ -46,25 +53,41 @@ Deviations from handoff:
 
 ## Build
 
-First clean build: [fill in after bench]
-Warnings: [fill in after bench]
+Target: Teensy 4.1 (migrated from T4.0; T4.1 arrived 2026-07-03).
+  platformio.ini board = teensy41 (CG-S2). Wiring/pins IDENTICAL to T4.0 per
+  05_WIRING.md — the board line was the only change needed.
+First clean build (CG-S2, T4.1, 2026-07-04): SUCCESS, 8.33s.
+  FLASH: code 74012, data 361032 -> free for files 7.68 MB
+  RAM1: variables 11072, code 69544 -> free for locals 414912
+  RAM2: variables 12416 -> free for malloc 511872
+Warnings: none observed in final link.
+
+Drop-in contract check (2026-07-04): SEN0626Sensor's person_sensor_face_t
+matches IRIS src/sensors/PersonSensor.h byte-for-byte, and the public method
+surface matches (isPresent/begin/read/enableID/setMode/enableLED/
+numFacesFound/faceDetails/timeSinceFaceDetectedMs). Confirmed true drop-in.
 
 ## Flash & Verify
 
-Firmware version flashed: CG-S1
-Boot message confirmed: [fill in]
-SEN0626 present on boot: [fill in]
-Face detected in serial output: [fill in]
-Eye tracks face on display: [fill in]
-AutoMove resumes on face lost: [fill in]
+Firmware version in repo: CG-S2  (REPO-ONLY — NOT flashed this session)
+Boot message confirmed: [pending — no Teensy enumerated on SuperMaster this session]
+SEN0626 present on boot: [pending bench]
+Face detected in serial output: [pending bench]
+Eye tracks face on display: [pending bench]
+AutoMove resumes on face lost: [pending bench]
 
 ## Issues Found
 
-[fill in after bench]
+- No Teensy 4.1 enumerated on SuperMaster during CG-S2 (only COM1 legacy +
+  COM4/COM5 Bluetooth). Could not flash or bench-verify. Connect the T4.1 via
+  USB before the next flash session.
 
-## Next Session
+## Next Session (bench — needs T4.1 connected + operator at bench)
 
-- [ ] Confirm native Y resolution (480 vs 640) on bench
-- [ ] Confirm baud rate on bench
-- [ ] Flash to Teensy, verify serial output and eye tracking
+- [ ] Connect T4.1 via USB, confirm it enumerates (pio device list)
+- [ ] Flash CG-S2, confirm "[CG] CyclopsGaze CG-S2" on serial @115200
+- [ ] Confirm "[CG] SEN0626 found at 115200" or "found at 9600" (record which)
+- [ ] Confirm native Y resolution (480 vs 640) — hold a face, watch y saturate
+- [ ] Confirm face detect line: "[CG] faces=1 conf=NNN x=N.NN y=N.NN"
+- [ ] Confirm eye tracks L/R/U/D; AutoMove resumes ~3s after face leaves frame
 - [ ] If tracking direction inverted, flip sign in main.cpp targetX/targetY
