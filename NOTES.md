@@ -1,5 +1,22 @@
 # CyclopsGaze — Session Notes
 
+## Purpose & Deployment Framing (operator, 2026-07-04)
+
+CyclopsGaze is a **future-proofing / public-launch hardware change**, NOT a fix
+for a current problem. IRIS's live Useful Sensors Person Sensor (SEN-21231) is
+**working fine for the operator right now** — nothing about IRIS is broken and
+nothing here changes live IRIS. This project exists because the Person Sensor is
+**discontinued** [[person_sensor_irreplaceable]], so a drop-in replacement is
+needed (a) as insurance if the live sensor ever dies, and (b) as the publicly-
+**replicable** gaze path for the IRIS launch (buyers can't source a discontinued
+part).
+
+Deployment posture: **bench-only, on a spare NON-INSTALLED Teensy 4.1** — do NOT
+pull the live Person Sensor or touch installed IRIS hardware to test this. Flash
++ verify happens on the standalone bench board at a later date, when the T4.1 is
+connected. No timeline pressure; the live Person Sensor stays the source of
+truth until CyclopsGaze is proven under load. Status stays REPO-ONLY until then.
+
 ## SEN0626 Protocol (from DFRobot GitHub, 2026-06-24)
 
 Source: https://github.com/DFRobot/DFRobot_GestureFaceDetection
