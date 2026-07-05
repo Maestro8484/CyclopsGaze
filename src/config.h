@@ -1,6 +1,6 @@
 #pragma once
 
-static constexpr char FIRMWARE_VERSION[] = "CG-S2";
+static constexpr char FIRMWARE_VERSION[] = "CG-S3";
 
 #include "eyes/eyes.h"
 #include "eyes/240x240/nordicBlue.h"
@@ -9,7 +9,84 @@ static constexpr char FIRMWARE_VERSION[] = "CG-S2";
 #define USE_GC9A01A
 #include "displays/GC9A01A_Display.h"
 
-// Single eye
+// ─────────────────────────────────────────────────────────────────────────────
+// Tracking tunables (bench-adjustable — see NOTES.md bench protocol)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Confidence gate, matching IRIS's psConfGate default (S153c). A face must
+// report box_confidence > PS_CONF_GATE to be tracked. The shim maps SEN0626
+// score (0-100) to box_confidence via score*255/100, so with strict '>' the
+// minimum passing score is 19/100. Lower this if clear frontal faces at ~1 m
+// score below that on the bench (audit 3.7).
+static constexpr uint8_t PS_CONF_GATE = 45;
+
+// Multiplies targetX/targetY before setTargetPosition. 1.0 = the IRIS-matched
+// (production-tuned) gaze range. Raise (>1) to make the eye reach its travel
+// limits with a face nearer frame-center; lower (<1) to damp the range. The
+// controller clamps the result to the unit circle, so values >1 are safe
+// (audit 3.8).
+static constexpr float GAZE_GAIN = 1.0f;
+
+// Time with no qualifying face before autoMove (idle wander) resumes.
+static constexpr unsigned long FACE_LOST_MS = 3000;
+
+// One-time bench calibration logging. When 1, the per-face serial line also
+// prints raw sensor register values (rawX/rawY/rawScore) so the operator can
+// read the true max Y (confirm NATIVE_H 480 vs 640) and raw score vs the
+// rescaled confidence without a scope. Set to 0 for normal operation (audit
+// 3.5). Kept ON by default until the first bench pass confirms the assumptions.
+#define CG_CALIB_RAW 1
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Displays / eyes
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// DUAL_EYE: uncomment to drive a second GC9A01A. Single-eye is the default and
+// needs no define. See 05_WIRING.md "Dual-Eye (optional)" for the pin table.
+//
+// Why both eyes share SPI0 (MOSI 11 / SCK 13) instead of the IRIS-style second
+// bus: on this board Serial1 (SEN0626) already owns pins 0 and 1. Teensy 4.1's
+// SPI1 collides with BOTH -- its hardware CS is pin 0 and its default MISO is
+// pin 1 -- so a second bus cannot be used without breaking the sensor UART.
+// A shared SPI0 with a separate CS per display sidesteps that entirely (SPI0's
+// MISO, pin 12, is free and unused by the write-only displays). Updates are
+// synchronous and renderFrame() drives one eye per call, so there is no bus
+// contention; the only cost is per-eye refresh rate roughly halving.
+//
+// #define DUAL_EYE
+
+#ifdef DUAL_EYE
+
+std::array<std::array<EyeDefinition, 2>, 1> eyeDefinitions{{
+    {nordicBlue::eye, nordicBlue::eye},
+}};
+
+// Both on SPI0 (MOSI=11, SCK=13), separate CS. mirror flags match IRIS
+// left/right: eye 0 mirror=true (also gets the EyeController eyeIndex==0
+// software X-flip), eye 1 mirror=false. The two eyes then track together.
+//        CS  DC MOSI SCK RST  ROT MIRROR USE_FB ASYNC
+GC9A01A_Config eyeInfo[] = {
+    {10, 2, 11, 13,  3, 0, true,  true, false},  // eye 0 (primary)
+    { 9, 8, 11, 13,  6, 0, false, true, false},  // eye 1 (second display)
+};
+
+constexpr uint32_t SPI_SPEED{20'000'000};
+
+EyeController<2, GC9A01A_Display> *eyes{};
+GC9A01A_Display *displayMain{};
+GC9A01A_Display *displaySecond{};
+
+void initEyes(bool autoMove, bool autoBlink, bool autoPupils) {
+  auto &defs = eyeDefinitions.at(0);
+  displayMain   = new GC9A01A_Display(eyeInfo[0], SPI_SPEED);
+  displaySecond = new GC9A01A_Display(eyeInfo[1], SPI_SPEED);
+  const DisplayDefinition<GC9A01A_Display> main{displayMain, defs[0]};
+  const DisplayDefinition<GC9A01A_Display> second{displaySecond, defs[1]};
+  eyes = new EyeController<2, GC9A01A_Display>({main, second}, autoMove, autoBlink, autoPupils);
+}
+
+#else  // single eye (default)
+
 std::array<std::array<EyeDefinition, 1>, 1> eyeDefinitions{{
     {nordicBlue::eye},
 }};
@@ -30,3 +107,5 @@ void initEyes(bool autoMove, bool autoBlink, bool autoPupils) {
   const DisplayDefinition<GC9A01A_Display> main{displayMain, defs[0]};
   eyes = new EyeController<1, GC9A01A_Display>({main}, autoMove, autoBlink, autoPupils);
 }
+
+#endif  // DUAL_EYE
