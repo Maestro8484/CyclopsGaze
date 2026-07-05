@@ -2,6 +2,13 @@
 
 // ── Modbus RTU helpers ────────────────────────────────────────────────────────
 
+// Max time to wait for a full Modbus response AFTER the request has been sent
+// (flush() already blocked until TX drained). A 4-register FC04 reply is 13
+// bytes = ~13.5 ms of wire time at 9600 baud; add the sensor's turnaround and a
+// normal round trip lands near ~25 ms. 100 ms is a ~4x safety margin yet caps a
+// stalled-sensor eye freeze at 100 ms instead of the old 300 ms (audit 3.6).
+static constexpr uint32_t MODBUS_RESP_TIMEOUT_MS = 100;
+
 static uint16_t modbusCRC(const uint8_t *data, size_t len) {
   uint16_t crc = 0xFFFF;
   for (size_t i = 0; i < len; i++) {
@@ -35,7 +42,7 @@ static bool modbusReadInputRegs(HardwareSerial &ser, uint8_t addr,
 
   // Response: addr(1) + FC(1) + byte_count(1) + data(count*2) + CRC(2)
   const uint8_t respLen = 5 + count * 2;
-  uint32_t deadline = millis() + 300;
+  uint32_t deadline = millis() + MODBUS_RESP_TIMEOUT_MS;
   while (ser.available() < respLen && millis() < deadline) {}
   if (ser.available() < respLen) return false;
 
@@ -57,9 +64,9 @@ static bool modbusReadInputRegs(HardwareSerial &ser, uint8_t addr,
 
 SEN0626Sensor::SEN0626Sensor(HardwareSerial &serial) : serial(serial) {}
 
-bool SEN0626Sensor::tryBaud(long baud) {
-  serial.begin(baud);
-  delay(500);
+bool SEN0626Sensor::tryBaud(long testBaud) {
+  serial.begin(testBaud);
+  delay(200);  // let the UART line settle (the AI-model boot is covered by BOOT_SETTLE_MS)
   // Read PID register (input register 0x00), expect 0x0272
   uint8_t buf[2];
   if (modbusReadInputRegs(serial, DEVICE_ADDR, 0x00, 1, buf)) {
@@ -71,13 +78,24 @@ bool SEN0626Sensor::tryBaud(long baud) {
 }
 
 bool SEN0626Sensor::begin() {
-  // Try 115200 first per spec, then 9600 (factory default)
-  for (long baud : {115200L, 9600L}) {
-    if (tryBaud(baud)) {
-      Serial.printf("[CG] SEN0626 found at %ld\n", baud);
-      present = true;
-      return true;
+  // The SEN0626 loads an AI model into RAM on power-up and will not answer
+  // Modbus until that completes. Hold off the first probe until the sensor has
+  // had BOOT_SETTLE_MS since power-on (audit 3.9).
+  while (millis() < BOOT_SETTLE_MS) {}
+
+  // Try 115200 first per spec, then 9600 (factory default). Retry the whole
+  // sweep a few times so a cold sensor that misses the first probe is still
+  // found rather than leaving tracking dead for the session.
+  for (int attempt = 0; attempt < BAUD_ATTEMPTS; attempt++) {
+    for (long testBaud : {115200L, 9600L}) {
+      if (tryBaud(testBaud)) {
+        baud = testBaud;
+        present = true;
+        Serial.printf("[CG] SEN0626 found at %ld (attempt %d)\n", testBaud, attempt + 1);
+        return true;
+      }
     }
+    delay(300);
   }
   Serial.println("[CG] SEN0626 NOT FOUND at 115200 or 9600 -- check wiring");
   present = false;
@@ -110,7 +128,15 @@ bool SEN0626Sensor::read() {
     return true;
   }
 
-  // Clamp and remap center coords to 0-255
+  // Preserve the raw register values for bench calibration (rawFace*()).
+  lastRawX = faceX;
+  lastRawY = faceY;
+  lastRawScore = score;
+
+  // Clamp and remap center coords to 0-255. X and Y are normalised over their
+  // OWN native span (640 wide, 480 tall) so a face at either frame edge drives
+  // the target to full deflection on that axis -- correct edge-to-edge gaze
+  // mapping despite the 4:3 vs 1:1 aspect mismatch (audit 3.4).
   faceX = min(faceX, (uint16_t)NATIVE_W);
   faceY = min(faceY, (uint16_t)NATIVE_H);
   score = min(score, (uint16_t)100);
@@ -120,7 +146,9 @@ bool SEN0626Sensor::read() {
 
   face.box_confidence = (uint8_t)(score * 255 / 100);
   // SEN0626 reports a face center, not a true bounding box. Store that center
-  // in both edges so consumers recover the exact target even at frame edges.
+  // in both edges so consumers recover the exact target even at frame edges
+  // (box_left==box_right==cx -> IRIS's (left+(right-left)/2) collapses to cx
+  // exactly, no edge drift at any value incl 0 and 255 -- audit 3.3).
   face.box_left = cx;
   face.box_right = cx;
   face.box_top = cy;
