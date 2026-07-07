@@ -14,23 +14,76 @@ Both the GC9A01A and SEN0626 run on 3.3V.
 Teensy 4.0 3.3V pin can supply both.
 DO NOT connect either to 5V — both are 3.3V logic only.
 
+**Verify the SEN0626's own VCC pin reads ~3.2-3.3V under load, not just the
+Teensy's 3.3V pin.** Confirmed on bench (2026-07-06): the Teensy pin measured a
+healthy 3.25V while the sensor's VCC pin measured only 2.6V — the drop was in a
+bad connector along the run, not the Teensy's regulator. An undervolted SEN0626
+is a documented real-world failure mode for this sensor family (random resets,
+frozen output, or degraded detection) — if tracking looks unreliable, check
+this before touching any firmware tuning.
+
+---
+
+## Mounting Distance
+
+DFRobot documents the SEN0626's detection range as **0.5–3 m (~19.7in–~9.8ft)**
+for both gesture and face recognition — this is the vendor's own spec, not a
+CyclopsGaze limitation. Mount it so a face is expected to sit **at least ~20
+inches** from the lens; closer than that is out-of-spec and tracking
+instability there is expected sensor behavior, not a bug. See NOTES.md
+"External research" for sourcing and how this compares to the Person Sensor.
+
+---
+
+## Wire Color Legend
+
+No color scheme exists for the CyclopsGaze eyes in IRIS — cross-checked against
+`IRIS_ARCH.md`'s Teensy 4.1 pin table: IRIS documents the GC9A01A eyes only as
+pin numbers, never wire colors (the one wire-color doc in that repo,
+`docs/servo_teensy40_wiring.md`, is for the *separate* servo/gesture Teensy 4.0,
+not the eyes). Nothing to inherit there, so the palette below is a **suggested**
+scheme built from a standard 10-color wire kit (Black/Brown/Red/Orange/Yellow/
+Green/Blue/Violet/Gray/White) with **zero repeats** across the single-eye +
+sensor system. **SEN0626 TX/RX colors are fixed as you specified** (Green/Blue —
+the DFRobot Gravity board silkscreens these pins "D/T" and "C/R" since the same
+header is reused across digital and UART Gravity modules); every other color
+was chosen to avoid colliding with those two. Swap in whatever you have on hand;
+what matters is staying consistent, since the dual-eye section reuses these
+same colors to show which wires are shared vs separate.
+
+| Signal role                  | Wire color |
+|-------------------------------|------------|
+| VCC / 3.3V                    | Red        |
+| GND                            | Black      |
+| SCK (SPI clock)                | Yellow     |
+| MOSI / SDA (SPI data)          | Orange     |
+| CS — eye 0 / primary           | Violet     |
+| DC (RS) — eye 0 / primary      | White      |
+| RST — eye 0 / primary          | Gray       |
+| BLK (backlight)                | Brown      |
+| SEN0626 TX / "D/T" (sensor→Teensy) | Green  |
+| SEN0626 RX / "C/R" (Teensy→sensor) | Blue   |
+
+Dual-eye adds 3 more roles (eye 1's separate CS/DC/RST) beyond the 10-color kit.
+Suggested: **Pink** (CS), **Tan** (DC), and reuse **Gray with a stripe/heat-shrink
+flag** (RST) — a labeled repeat of eye 0's RST color, since the two are on
+different connectors and unlikely to be confused, but the flag avoids any
+ambiguity when both harnesses run side by side. See the dual-eye table below.
+
 ---
 
 ## GC9A01A Display → Teensy 4.0
 
-```
-GC9A01A Pin    Teensy 4.0 Pin    Notes
------------    --------------    -----
-VCC            3.3V              3.3V ONLY — not 5V tolerant
-GND            GND
-SCK            13                SPI clock (hardware SPI)
-MOSI (SDA)     11                SPI data (hardware SPI)
-CS             10                Chip select — NOT pin 0 (conflicts with Serial1 RX)
-DC (RS)        2                 Data/Command select
-RST            3                 Reset
-BLK (LED)      3.3V              Backlight — tie to 3.3V for always-on
-                                 OR wire to a free pin for software control
-```
+| GC9A01A Pin | Teensy 4.0 Pin | Wire Color | Notes |
+|---|---|---|---|
+| VCC | 3.3V | Red | 3.3V ONLY — not 5V tolerant |
+| GND | GND | Black | |
+| SCK | 13 | Yellow | SPI clock (hardware SPI) |
+| MOSI (SDA) | 11 | Orange | SPI data (hardware SPI) |
+| CS | 10 | Violet | Chip select — NOT pin 0 (conflicts with Serial1 RX) |
+| DC (RS) | 2 | White | Data/Command select |
+| RST | 3 | Gray | Reset |
+| BLK (LED) | 3.3V | Brown | Backlight — tie to 3.3V for always-on, OR wire to a free pin for software control |
 
 **No MISO wire needed — display is write-only.**
 
@@ -38,14 +91,19 @@ BLK (LED)      3.3V              Backlight — tie to 3.3V for always-on
 
 ## SEN0626 AI Camera → Teensy 4.0
 
-```
-SEN0626 Pin    Teensy 4.0 Pin    Notes
------------    --------------    -----
-VCC            3.3V              3.3V ONLY
-GND            GND
-TX             0                 Teensy Serial1 RX — sensor transmits, Teensy receives
-RX             1                 Teensy Serial1 TX — Teensy transmits, sensor receives
-```
+**Onboard DIP switch — MUST be set to UART, not I2C.** The SEN0626 breakout has
+a physical mode-select DIP switch. This firmware speaks Modbus RTU over UART
+(Serial1) only — it has no I2C driver. Confirmed on bench 2026-07-06: with the
+switch left on I2C (as-shipped/default), the sensor never answers and
+`begin()` logs `SEN0626 NOT FOUND at 115200 or 9600`. Flip the switch to UART
+before wiring TX/RX; there is no firmware workaround for the wrong mode.
+
+| SEN0626 Pin | Teensy 4.0 Pin | Wire Color | Notes |
+|---|---|---|---|
+| VCC | 3.3V | Red | 3.3V ONLY |
+| GND | GND | Black | |
+| TX ("D/T") | 0 | Green | Teensy Serial1 RX — sensor transmits, Teensy receives |
+| RX ("C/R") | 1 | Blue | Teensy Serial1 TX — Teensy transmits, sensor receives |
 
 **TX→RX and RX→TX — always cross the wires. TX on sensor goes to RX on Teensy.**
 
@@ -53,25 +111,23 @@ RX             1                 Teensy Serial1 TX — Teensy transmits, sensor 
 
 ## Full Connection Summary (all wires)
 
-```
-Teensy 4.0                GC9A01A Display
-----------                ---------------
-3.3V        ----------->  VCC
-GND         ----------->  GND
-Pin 13      ----------->  SCK
-Pin 11      ----------->  MOSI (SDA)
-Pin 10      ----------->  CS
-Pin  2      ----------->  DC (RS)
-Pin  3      ----------->  RST
-3.3V        ----------->  BLK (LED backlight)
+| Teensy 4.0 Pin | Wire Color | Direction | GC9A01A Display Pin |
+|---|---|---|---|
+| 3.3V | Red | → | VCC |
+| GND | Black | → | GND |
+| 13 | Yellow | → | SCK |
+| 11 | Orange | → | MOSI (SDA) |
+| 10 | Violet | → | CS |
+| 2 | White | → | DC (RS) |
+| 3 | Gray | → | RST |
+| 3.3V | Brown | → | BLK (LED backlight) |
 
-Teensy 4.0                SEN0626 Camera
-----------                --------------
-3.3V        ----------->  VCC
-GND         ----------->  GND
-Pin  0      <-----------  TX   (sensor → Teensy)
-Pin  1      ----------->  RX   (Teensy → sensor)
-```
+| Teensy 4.0 Pin | Wire Color | Direction | SEN0626 Camera Pin |
+|---|---|---|---|
+| 3.3V | Red | → | VCC |
+| GND | Black | → | GND |
+| 0 | Green | ← | TX / "D/T" (sensor → Teensy) |
+| 1 | Blue | → | RX / "C/R" (Teensy → sensor) |
 
 Total wires: 12
 
@@ -131,31 +187,27 @@ testbed.
 
 ### Second display → Teensy 4.1
 
-```
-GC9A01A (eye 1) Pin   Teensy 4.1 Pin   Notes
--------------------   --------------   -----
-VCC                   3.3V             3.3V ONLY
-GND                   GND
-SCK                   13               SHARED with eye 0 (SPI0 clock)
-MOSI (SDA)            11               SHARED with eye 0 (SPI0 data)
-CS                    9                Separate chip select (eye 0 uses 10)
-DC (RS)               8                Separate data/command
-RST                   6                Separate reset (or tie to 3.3V and set RST=-1)
-BLK (LED)             3.3V             Backlight always-on
-```
+| GC9A01A (eye 1) Pin | Teensy 4.1 Pin | Wire Color | Notes |
+|---|---|---|---|
+| VCC | 3.3V | Red | 3.3V ONLY |
+| GND | GND | Black | |
+| SCK | 13 | Yellow | SHARED with eye 0 (SPI0 clock) |
+| MOSI (SDA) | 11 | Orange | SHARED with eye 0 (SPI0 data) |
+| CS | 9 | Pink | Separate chip select (eye 0 uses 10 / Violet) |
+| DC (RS) | 8 | Tan | Separate data/command (eye 0 uses 2 / White) |
+| RST | 6 | Gray + stripe | Separate reset (eye 0 uses plain Gray on pin 3); flag this wire so it's not confused with eye 0's RST — or tie to 3.3V and set RST=-1 |
+| BLK (LED) | 3.3V | Brown | Backlight always-on (shared with eye 0) |
 
 ### Dual-eye pin map (both displays)
 
-```
-Signal        Eye 0 (primary)   Eye 1 (second)   Shared?
-------        ---------------   --------------   -------
-SCK           13                13               yes (SPI0)
-MOSI          11                11               yes (SPI0)
-CS            10                 9               no
-DC             2                 8               no
-RST            3                 6               no
-mirror flag   true              false            (matches IRIS left/right)
-```
+| Signal | Eye 0 (primary) Pin | Eye 0 Wire Color | Eye 1 (second) Pin | Eye 1 Wire Color | Shared? |
+|---|---|---|---|---|---|
+| SCK | 13 | Yellow | 13 | Yellow | yes (SPI0) |
+| MOSI | 11 | Orange | 11 | Orange | yes (SPI0) |
+| CS | 10 | Violet | 9 | Pink | no |
+| DC | 2 | White | 8 | Tan | no |
+| RST | 3 | Gray | 6 | Gray + stripe | no |
+| mirror flag | true | — | false | — | (matches IRIS left/right) |
 
 `eyeInfo[]` in `src/config.h` (DUAL_EYE branch) encodes exactly this. Eye 0
 keeps `mirror=true` (and the EyeController's built-in eye-0 X-flip); eye 1 is
