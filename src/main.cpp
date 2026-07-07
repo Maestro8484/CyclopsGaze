@@ -20,12 +20,28 @@ void setup() {
 void loop() {
   bool sampled = sensor.read();
 
-  // Gate on confidence exactly like IRIS (face.box_confidence > psConfGate,
-  // default 45). The shim emits box_confidence = score*255/100, so with strict
-  // '>' the minimum passing SEN0626 score is 19/100 (18 -> 45, not > 45; 19 ->
-  // 48). Tune PS_CONF_GATE on the bench if clear faces score lower (audit 3.7).
-  person_sensor_face_t f = sensor.faceDetails(0);
-  bool haveFace = sampled && sensor.numFacesFound() > 0 && f.box_confidence > PS_CONF_GATE;
+  // Gate on confidence (face.box_confidence > PS_CONF_GATE). CG-S5: PS_CONF_GATE
+  // is now DFRobot's own documented validity floor for this sensor (raw score
+  // >=60, wiki.dfrobot.com/sen0626/docs/23024) translated to our 0-255 scale --
+  // not an arbitrary/IRIS-borrowed number. Tune further only against real bench
+  // scores (audit 3.7, NOTES.md "External research").
+  bool anyFace = sampled && sensor.numFacesFound() > 0;
+  person_sensor_face_t f = anyFace ? sensor.faceDetails(0) : person_sensor_face_t{};
+  bool haveFace = anyFace && f.box_confidence > PS_CONF_GATE;
+
+#if CG_CALIB_RAW
+  // Bench range/angle tuning (S4): log EVERY raw detection the sensor reports,
+  // gate-passed or not. Logging only inside the gated branch (CG-S3) meant the
+  // line vanished the instant a detection dropped below PS_CONF_GATE -- exactly
+  // the boundary data needed to tell "gate too strict" from "sensor's own
+  // detection envelope ended" apart. gate=PASS/REJECT makes that call visible
+  // without touching the eye (untracked detections never call setTargetPosition).
+  if (anyFace) {
+    Serial.printf("[CG] faces=%d rawScore=%u conf=%d gate=%s | rawX=%u rawY=%u\n",
+                  sensor.numFacesFound(), sensor.rawScore(), f.box_confidence,
+                  haveFace ? "PASS" : "REJECT", sensor.rawFaceX(), sensor.rawFaceY());
+  }
+#endif
 
   if (haveFace) {
     // box_left==box_right==cx and box_top==box_bottom==cy (center-only box), so
@@ -43,15 +59,7 @@ void loop() {
     eyes->setTargetPosition(targetX, targetY);
 
 #if CG_CALIB_RAW
-    // One-time bench calibration: raw register values expose the true max Y
-    // (confirm NATIVE_H 480 vs 640) and raw score vs rescaled conf. Set
-    // CG_CALIB_RAW to 0 in config.h to compile this out for normal operation.
-    Serial.printf("[CG] faces=%d conf=%d x=%.2f y=%.2f | rawX=%u rawY=%u rawScore=%u\n",
-                  sensor.numFacesFound(), f.box_confidence, targetX, targetY,
-                  sensor.rawFaceX(), sensor.rawFaceY(), sensor.rawScore());
-#else
-    Serial.printf("[CG] faces=%d conf=%d x=%.2f y=%.2f\n",
-                  sensor.numFacesFound(), f.box_confidence, targetX, targetY);
+    Serial.printf("[CG]   -> tracking x=%.2f y=%.2f\n", targetX, targetY);
 #endif
 
   } else if (sensor.timeSinceFaceDetectedMs() > FACE_LOST_MS) {

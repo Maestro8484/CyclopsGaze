@@ -1,6 +1,6 @@
 #pragma once
 
-static constexpr char FIRMWARE_VERSION[] = "CG-S3";
+static constexpr char FIRMWARE_VERSION[] = "CG-S5";
 
 #include "eyes/eyes.h"
 #include "eyes/240x240/nordicBlue.h"
@@ -13,12 +13,18 @@ static constexpr char FIRMWARE_VERSION[] = "CG-S3";
 // Tracking tunables (bench-adjustable — see NOTES.md bench protocol)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Confidence gate, matching IRIS's psConfGate default (S153c). A face must
-// report box_confidence > PS_CONF_GATE to be tracked. The shim maps SEN0626
-// score (0-100) to box_confidence via score*255/100, so with strict '>' the
-// minimum passing score is 19/100. Lower this if clear frontal faces at ~1 m
-// score below that on the bench (audit 3.7).
-static constexpr uint8_t PS_CONF_GATE = 45;
+// Confidence gate. A face must report box_confidence > PS_CONF_GATE to be
+// tracked. CG-S5: raised from 45 to 152, derived from DFRobot's OWN documented
+// threshold for this sensor family -- the SEN0626 wiki setup guide
+// (wiki.dfrobot.com/sen0626/docs/23024) states "a score >=60 is considered
+// valid" and its sample code calls gfd.setFaceDetectThres(60). The CG-S3
+// default of 45 (box_confidence, matching IRIS's own unrelated psConfGate
+// constant) mapped to a raw SEN0626 score of just ~19/100 -- roughly a third of
+// the vendor's own validity floor, likely accepting noisy/marginal detections.
+// 152 = floor(60*255/100) - 1, so with strict '>' a raw score of exactly 60
+// passes and 59 does not. Lower only if bench data shows DFRobot's own
+// threshold is too strict for this specific unit (audit 3.7).
+static constexpr uint8_t PS_CONF_GATE = 152;
 
 // Multiplies targetX/targetY before setTargetPosition. 1.0 = the IRIS-matched
 // (production-tuned) gaze range. Raise (>1) to make the eye reach its travel
