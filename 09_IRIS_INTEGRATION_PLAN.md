@@ -80,12 +80,13 @@ connected during CG-S1/S2/S3). The gate stays **RED** until the bench pass runs.
   EyeController, so the mapping/render logic is confirmed correct — the only
   remaining direction question is the SEN0626's physical Y-axis orientation, now
   a single documented bench flip rather than a debugging expedition.
-- The **confidence-scale check is now turnkey.** The shim exposes raw score and
-  the firmware logs it next to the rescaled `box_confidence` under
-  `CG_CALIB_RAW`; CyclopsGaze also now gates with `PS_CONF_GATE` (default 45,
-  matching IRIS S153c), so the bench directly measures the exact quantity the
-  IRIS gate will consume. (Note: IRIS's own gate default is 45 since S153c — the
-  §5 table's "CONF=60" reference predates that; verify against the live setting.)
+- The **confidence-scale check is now turnkey, and re-derived from the vendor's
+  own spec.** CG-S5: `PS_CONF_GATE` is no longer IRIS's borrowed constant — it's
+  DFRobot's own documented validity floor for this sensor (raw score >=60,
+  wiki.dfrobot.com/sen0626/docs/23024) translated to box_confidence (152). The
+  shim exposes raw score and the firmware logs it next to both the rescaled
+  `box_confidence` and a PASS/REJECT gate verdict under `CG_CALIB_RAW`, so the
+  bench directly measures the exact quantity IRIS's gate would consume.
 - The **NATIVE_H (480 vs 640)** and **direction** checks have an explicit,
   copy-pasteable procedure — NOTES.md "Flash & Verify — Bench Protocol" steps
   5-7. This replaces the old placeholder.
@@ -93,17 +94,38 @@ connected during CG-S1/S2/S3). The gate stays **RED** until the bench pass runs.
   hardened/verified in code (audit 3.2/3.6/3.9), removing three fragility risks
   before the sensor is ever trusted on the IRIS bus.
 
+**Progress this session (2026-07-06), T4.1 on bench at COM6:**
+- [x] Flashed and enumerated; SEN0626 found (root-caused an onboard I2C/UART
+  DIP switch left in I2C mode — fixed).
+- [x] Found + fixed a power fault (2.6V at sensor VCC vs 3.25V at the Teensy
+  pin — bad connector, not the regulator).
+- [x] Confidence-scale check done, re-derived from DFRobot's own documented
+  floor (`PS_CONF_GATE=152`, CG-S5) rather than IRIS's borrowed constant.
+
+**New finding that bears directly on this gate decision:** DFRobot documents
+the SEN0626's detection range as **0.5–3 m (~19.7in–~9.8ft)** for both gesture
+and face recognition. No public FOV-in-degrees or minimum-working-distance spec
+was found for the Person Sensor to compare numerically, but IRIS's own
+production history with the Person Sensor has never surfaced a "must stand
+back ~20 inches" complaint, while the SEN0626 has a hard documented floor
+sitting right at typical close conversational distance. **If IRIS's real
+interaction distance is often under ~20 inches, this is a genuine, sourced
+downgrade for this specific use case** — not something tuning can fix — and
+should be weighed before deploying, not discovered after. See NOTES.md
+"External research" for the full sourcing.
+
 **Still RED — must be VERIFIED on the bench before touching IRIS** (NOTES.md bench protocol):
 
-- [ ] Flash CG-S3 to the spare T4.1; confirm `[CG] CyclopsGaze CG-S3` on serial (step 2).
-- [ ] Confirm SEN0626 enumerated + baud (`found at 9600` vs `115200` — record which) (step 3).
 - [ ] Confirm native Y resolution (480 vs 640) via `rawY` max (step 6).
-- [ ] Confirm `[CG] faces=1 conf=.. x=.. y=..` on a real face; eye tracks L/R/U/D
-      (flip targetY sign only if vertical inverted); AutoMove resumes ~3 s after
-      the face leaves frame (steps 4/5/8).
-- [ ] **Confidence-scale check (§5):** capture raw SEN0626 `score` vs the shim's
-      emitted `box_confidence`; confirm/tune `PS_CONF_GATE` against the live IRIS
-      CONF setting before trusting the gate (step 7).
+- [ ] Confirm `[CG] faces=1 ...` on a real face; eye tracks L/R/U/D (flip
+      targetY sign only if vertical inverted); AutoMove resumes ~3 s after the
+      face leaves frame (steps 4/5/8).
+- [ ] **Lateral (X-axis) tracking:** operator reports unstable horizontal
+      tracking, worse at close range, vs. clean vertical tracking. Re-test at
+      ≥20in (inside the documented floor) with the power fix and new gate in
+      place before concluding anything further is wrong (step 7b,
+      11_HANDOFF_FABLE_LATERAL_TRACKING.md).
+- [ ] Re-verify PS_CONF_GATE=152 against real bench scores (step 7).
 
 Deploying an unproven sensor design into the live IRIS T4.1 is exactly the "refactor of an unproven design = wasted motion" the handoff warns against. **Live IRIS keeps the working Person Sensor as source of truth until CyclopsGaze is VERIFIED on the bench** (NOTES.md posture; memory `person_sensor_irreplaceable`).
 
