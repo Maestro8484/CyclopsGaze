@@ -64,3 +64,23 @@ landed; optional dual-eye added. Clean build (single-eye and `-DDUAL_EYE`), stil
   CS (eye1: CS9/DC8/RST6). 05_WIRING gains a full dual-eye section.
 - Tunables (PS_CONF_GATE, GAZE_GAIN, FACE_LOST_MS, CG_CALIB_RAW) centralised in
   config.h. NOTES.md gains the full 10-step first-flash bench protocol.
+
+## CG-S4 (2026-07-06) — first real bench pass: DIP-switch fix, ungated calibration logging
+
+First session with the T4.1 actually connected and flashed (COM6). Status moved from REPO-ONLY to DEPLOYED (bench-verified in part; see NOTES.md for what's still open).
+
+- **SEN0626 NOT FOUND, root-caused:** the sensor's onboard I2C/UART mode DIP switch was left on I2C. This firmware is UART-only with no fallback. Fixed by flipping the switch — no code change. Documented in 05_WIRING.md and the bench protocol so it's checked first next time, before re-wiring.
+- **Calibration logging ungated:** CG-S3's raw/diagnostic serial line only printed inside the confidence-gated branch, so it vanished the instant a detection dropped below `PS_CONF_GATE` — exactly the boundary data needed for range/gate tuning. `main.cpp` now logs every raw detection (`rawScore`/`conf`/`gate=PASS|REJECT`/`rawX`/`rawY`) regardless of gate outcome; the eye still only moves on a `PASS`.
+- FIRMWARE_VERSION CG-S3 → CG-S4.
+
+## CG-S5 (2026-07-06) — power fault fixed, confidence gate re-derived from vendor spec, distance floor documented
+
+Same bench session, continued. Bench testing surfaced a narrow detection envelope (1-2ft / ±10-20°) and unstable lateral tracking; before more firmware tuning, traced both to real, sourced causes.
+
+- **Power fault found and fixed:** SEN0626 VCC measured 2.6V under load vs. 3.25V at the Teensy's own 3.3V pin — the drop was in a bad connector along the run, not the Teensy regulator. Undervolting an active-inference sensor like this is a documented SEN0626 forum failure mode (random resets, frozen output, degraded detection). Fixed by reseating/direct-wiring; documented in 05_WIRING.md as a first-check item.
+- **PS_CONF_GATE re-derived from DFRobot's own spec, not IRIS's:** CG-S3's default (45) was borrowed from IRIS's unrelated `psConfGate` constant and mapped to an effective SEN0626 score floor of only ~19/100. DFRobot's own setup guide states "a score >=60 is considered valid" and its sample code sets exactly that threshold. New default: `PS_CONF_GATE = 152` (`floor(60*255/100)-1`), so raw score 60 passes and 59 doesn't.
+- **Detection-range floor documented:** DFRobot specs 0.5-3m (~19.7in-9.8ft) for both gesture and face recognition. The operator's bench observation of instability below ~15in is *below this documented floor* — out-of-spec operation, not a bug. Added to 05_WIRING.md (mounting guidance) and NOTES.md bench step 7b.
+- **Person Sensor comparison — honest gap flagged, not fabricated:** no public FOV-in-degrees or minimum-working-distance spec was found for the Person Sensor to do an exact numeric comparison. Qualitatively, IRIS's own production history with the Person Sensor has never surfaced a "must stand back" complaint, while the SEN0626's 0.5m floor sits at typical close conversational distance — flagged in 09_IRIS_INTEGRATION_PLAN.md §6 as a real consideration for the deploy decision, not just a tuning task.
+- **Open, handed off:** lateral (X-axis) tracking instability at close range needs re-testing now that power and the gate are fixed, before concluding anything further is wrong. See `11_HANDOFF_FABLE_LATERAL_TRACKING.md`.
+- FIRMWARE_VERSION CG-S4 → CG-S5.
+- **Status: DEPLOYED, not yet VERIFIED** — sensor detection, power, and gate are bench-confirmed; direction (3.1), NATIVE_H (3.5/step 6), and lateral tracking are still open per NOTES.md.
