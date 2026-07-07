@@ -152,18 +152,83 @@ for up to 300ms. New `MODBUS_RESP_TIMEOUT_MS = 100` keeps a ~4x margin against
 false timeouts while capping the worst-case eye freeze at 100ms. Only bites on an
 actual comms glitch, at most once per 150ms sample.
 
-### 3.7 Confidence gate — divergence fixed + bench-calibration flagged.
+### 3.7 Confidence gate — divergence fixed, then re-calibrated against the vendor's own spec (CG-S5).
 
-CyclopsGaze main previously tracked ANY detected face with NO confidence gate,
-unlike IRIS (`face.box_confidence > psConfGate`). Added `PS_CONF_GATE` (config.h,
-default **45**, matching IRIS S153c). Threshold math with the shim's
-score*255/100 map and strict `>`: score 18 → conf 45 (NOT >45, fails); score
-19 → conf 48 (passes). So the effective minimum SEN0626 score is **19/100**.
-BENCH CALIBRATION: at ~1 m frontal, watch the `conf=` field. If a clearly-
-detected face reports conf ≤45 (raw score ≤18), lower PS_CONF_GATE until stable
-frontal faces pass but noise doesn't. Note the lost-timer follows raw detection
-(shim resets it on any face in the register), same as IRIS — a persistent
-sub-gate face holds position rather than resuming autoMove.
+CyclopsGaze main previously tracked ANY detected face with NO confidence gate.
+CG-S3 added `PS_CONF_GATE` at **45**, borrowed from IRIS's unrelated
+`psConfGate` constant (a different sensor's calibration, not the SEN0626's).
+That mapped to an effective minimum SEN0626 score of just ~19/100.
+
+**CG-S5: replaced with DFRobot's own documented threshold.** The SEN0626 setup
+guide (wiki.dfrobot.com/sen0626/docs/23024) states outright: *"a score >=60 is
+considered valid"*, and DFRobot's own sample code calls
+`gfd.setFaceDetectThres(60)`. 19/100 was roughly a third of the vendor's own
+validity floor — almost certainly accepting noisy/marginal detections, which
+plausibly contributed to erratic tracking (see the lateral-tracking findings
+below). `PS_CONF_GATE` is now **152** (`floor(60*255/100)-1`, so raw score 60
+passes and 59 does not) — derived from spec, not guessed. Re-verify on the
+bench: does `gate=PASS` now correlate with visibly stable tracking and
+`gate=REJECT` with faces you wouldn't trust anyway? If DFRobot's own floor is
+still too strict or too loose for this specific unit, adjust from measured
+data, not intuition.
+
+Note the lost-timer follows raw detection (shim resets it on any face in the
+register, gated or not), same as before — a persistent sub-gate face holds
+position rather than resuming autoMove.
+
+### External research — SEN0626 real-world specs, and vs. the Person Sensor (2026-07-06)
+
+Bench testing (see below) turned up a narrow effective detection envelope and
+unstable lateral tracking below a certain distance. Before writing more
+firmware, pulled the vendor's own documentation and forum history to check
+whether these are known/expected characteristics rather than bugs:
+
+- **Documented detection range: 0.5–3 m** (DFRobot wiki, `wiki.dfrobot.com/sen0626/`
+  and the setup guide) for BOTH gesture and face recognition — no separate,
+  tighter face-specific number is given. 0.5 m ≈ **19.7 inches**. The operator's
+  bench observation of tracking degrading below ~15 inches is **below this
+  documented floor** — that's out-of-spec operation, not a firmware bug. Bench
+  step 9 (edge tracking) should be re-scoped to test at/above ~20 inches, not below.
+- **Field of view: 85° diagonal only** — DFRobot does not publish separate
+  horizontal/vertical FOV numbers. This is a real gap in their spec sheet (same
+  gap we already flagged ourselves for NATIVE_H — DFRobot documents the 0-640 X
+  coordinate range but never states the Y range or the H/V FOV split). No
+  authoritative number exists to compute an exact degrees-per-pixel value for
+  either axis.
+  - CyclopsGaze does not have a confirmed vendor explanation for the reported
+    lateral (X-axis)-specific jitter at close range vs. clean vertical (Y-axis)
+    tracking. Working hypothesis, NOT vendor-confirmed: natural head-tracking
+    behavior turns the head in **yaw** (left/right) more than **pitch**
+    (up/down) when following something laterally, and yaw rotation changes a
+    frontal-trained face detector's visible landmark set more than pitch does —
+    at close range, where angular resolution per unit of physical head movement
+    is coarsest, this could plausibly show up as X-specific centroid noise.
+    This is reasoned inference, not something the datasheet or forum discusses
+    — flagged for the next session to test empirically (see 11_HANDOFF doc).
+- **Confidence: DFRobot's own recommended validity floor is score >=60/100**
+  (previous section, 3.7) — used to derive the CG-S5 `PS_CONF_GATE`.
+- **Known real-world failure modes** (DFRobot forum, "SEN0626 Gesture and Face
+  Detection Module failures," dfrobot.com/forum/topic/401101): dominant causes
+  are power-supply instability ("unstable or low voltage can cause random
+  resets, frozen output, or no detection at all") and wiring/comms issues, NOT
+  a generally-faulty sensor. This matches this session's own bench finding
+  exactly — a ~0.65V sag on the sensor's VCC (3.25V at the Teensy pin down to
+  2.6V at the sensor, traced to a bad connector, not the regulator) was found
+  and fixed before the confidence-gate work above. No third-party review
+  reporting on tracking *precision* (as opposed to detection failures) was found.
+- **Person Sensor (SEN-21231) comparison — honest gap:** no public datasheet
+  with FOV-in-degrees or a documented minimum working distance was found for
+  the Person Sensor (the SparkFun/DigiKey "datasheet" PDF is a one-page product
+  blurb, not a technical spec sheet). We cannot make a precise numeric
+  side-by-side. **Qualitatively**, though, this matters for the IRIS drop-in
+  use case specifically: IRIS is a tabletop/desktop robot face meant to be
+  looked at from close, conversational range, and its production history with
+  the Person Sensor has never surfaced a "must stand back ~20 inches" complaint
+  — while the SEN0626's documented 0.5 m floor sits right at or inside typical
+  close conversational distance. **If the operator's own IRIS interaction
+  distance is regularly under ~20 inches, the SEN0626 is a real, sourced
+  downgrade for that specific use case**, not just a tuning gap — this should
+  weigh on the 09_IRIS_INTEGRATION_PLAN gate decision, not just be tuned around.
 
 ### 3.8 mapRadius / tracking range — VERDICT: correct, matches IRIS. Knob added.
 
@@ -244,7 +309,12 @@ Record WHICH baud. FAIL:
 [CG] SEN0626 NOT FOUND at 115200 or 9600 -- check wiring
 ```
 → check TX→pin0 / RX→pin1 cross, 3.3V, GND. (PID 0x0272 is validated internally;
-a wrong PID reads as NOT FOUND.)
+a wrong PID reads as NOT FOUND.) **Check the onboard DIP switch first** — the
+SEN0626 breakout has a physical I2C/UART mode switch; this firmware is
+UART-only. Confirmed on bench (2026-07-06): board shipped/left in I2C mode
+produced NOT FOUND with correct wiring and correct code — flipping the switch
+to UART fixed it immediately, no code change. This is the most likely single
+cause of a first-flash NOT FOUND and should be checked before re-wiring.
 
 ### 4. Face detect (serial format)
 
@@ -288,11 +358,43 @@ Record the observed max here. Also sanity-check rawX maxes near 640.
 ### 7. Confidence calibration
 
 Action: at ~1 m frontal, read the `conf` field (and rawScore).
-Expected: a clear frontal face should comfortably clear conf > 45 (raw score ≥19).
-- If a clear face reads conf ≤45 / it won't track: lower `PS_CONF_GATE` in
-  config.h (e.g. to 20-30) until stable frontal faces pass but empty-frame noise
-  does not, reflash. Record the value that works.
-- If noise/empty frames produce faces=1: raise PS_CONF_GATE.
+Expected (CG-S5): a clear frontal face should comfortably clear conf > 152
+(raw score ≥60 — DFRobot's own documented validity floor, NOTES.md "External
+research").
+- If a clear face reads conf ≤152 / it won't track: this means DFRobot's own
+  recommended floor is too strict for this specific unit — lower `PS_CONF_GATE`
+  in config.h incrementally, reflash, and record the value that stabilizes
+  tracking without letting empty-frame noise through.
+- If noise/empty frames produce faces=1 even at 152: raise PS_CONF_GATE further.
+
+### 7b. Distance floor + lateral (X-axis) tracking (CG-S5, bench-observed 2026-07-06)
+
+DFRobot's own documented detection range is **0.5–3 m (~19.7 in – ~9.8 ft)**
+for both gesture and face recognition (NOTES.md "External research"). Below
+~20 inches is **out-of-spec operation** — instability there is expected, not a
+firmware bug. Test at/above 20 inches, not below.
+
+A power issue was also found and fixed this session (2.6V measured at the
+sensor's VCC vs. 3.25V at the Teensy's own 3.3V pin — traced to a bad
+connector in the VCC run, not the Teensy's regulator; reseating/direct-wiring
+fixed it). If you haven't already, confirm the sensor's VCC reads ~3.2-3.3V
+before re-running this step, since undervolting an active-inference sensor can
+independently produce exactly this kind of instability.
+
+Action: with VCC confirmed healthy and PS_CONF_GATE=152, stand at ~24-36
+inches (safely inside the documented range) and move laterally (left/right)
+while keeping the same distance. Watch `rawX` and the eye's horizontal
+tracking specifically — the operator reported clean vertical (Y) tracking but
+unstable lateral (X) tracking, worse the closer they stood.
+- If `rawX` is steady while you hold still and only moves when you actually
+  move: X tracking is fine at this distance: the problem was distance-related
+  (floor violation) and/or the now-fixed power issue, not a firmware/mapping bug.
+- If `rawX` still jitters rapidly while you hold still at 24-36": that's a
+  genuine sensor-side X-axis noise issue independent of distance and power —
+  see 11_HANDOFF_FABLE_LATERAL_TRACKING.md for the investigation plan (a
+  smoothing/low-pass filter on targetX, modeled on IRIS's own panServo
+  `filteredPan` alpha=0.15 pattern, is the leading candidate fix if this turns
+  out to be sensor noise rather than a mapping bug).
 
 ### 8. AutoMove resume (lost timeout)
 
@@ -321,21 +423,43 @@ Note: per-eye refresh is ~half single-eye (shared bus) — expected, not a fault
 
 ---
 
-## Issues Found (open)
+## Issues Found
 
-- Hardware never flashed/bench-verified (REPO-ONLY). No T4.1 was enumerated on
-  SuperMaster during CG-S1/S2/S3. Connect the spare T4.1 before the next flash
-  session and run the bench protocol above.
+Resolved this session (2026-07-06), T4.1 connected on COM6:
+- SEN0626 initially NOT FOUND — root cause was the sensor's onboard I2C/UART
+  DIP switch left in I2C mode (this firmware is UART-only). Fixed by flipping
+  the switch; documented in 05_WIRING.md and bench step 3.
+- SEN0626 VCC measured 2.6V vs 3.25V at the Teensy's own 3.3V pin — a bad
+  connector in the VCC run (not the Teensy regulator, which tested healthy).
+  Fixed by reseating/direct-wiring. Undervolting an active-inference sensor is
+  a documented SEN0626 forum failure mode (NOTES.md "External research") and
+  plausibly contributed to the narrow detection envelope reported below.
+- Confidence gate was tuned against IRIS's own unrelated constant (45), not
+  the SEN0626's actual behavior — replaced with DFRobot's documented floor
+  (score >=60 → PS_CONF_GATE=152, CG-S5, audit 3.7).
+
+Open:
+- Lateral (X-axis) tracking reported unstable, worse at close range; vertical
+  (Y-axis) reported clean. Distance floor (0.5m/~20in, DFRobot-documented) and
+  the power fix above may resolve some/all of this — needs re-test at ≥20in
+  with PS_CONF_GATE=152 before concluding anything further is wrong. See bench
+  step 7b and 11_HANDOFF_FABLE_LATERAL_TRACKING.md.
+- NATIVE_H (480 vs 640) not yet confirmed on this bench pass.
+- Y-axis physical orientation (audit 3.1) not yet confirmed on this bench pass.
 
 ## Next Session (bench — needs T4.1 connected + operator at bench)
 
-- [ ] Steps 1-3: enumerate, flash CG-S3, confirm boot + SEN0626 baud (record which).
+- [x] Steps 1-3: enumerate, flash, confirm boot + SEN0626 baud — DONE (COM6,
+      DIP switch fixed, sensor found).
 - [ ] Step 4: confirm face-detect serial line.
 - [ ] Step 5: confirm L/R/U/D directions; flip targetY sign ONLY if vertical inverted.
 - [ ] Step 6: record max rawY → confirm NATIVE_H 480 vs 640.
-- [ ] Step 7: confirm/tune PS_CONF_GATE vs real scores.
+- [x] Step 7: PS_CONF_GATE re-derived from DFRobot's documented floor (152) — CG-S5.
+      Re-verify this value against real bench scores next session.
+- [ ] Step 7b (new): re-test lateral tracking at ≥20in with the power fix +
+      new gate in place; see 11_HANDOFF_FABLE_LATERAL_TRACKING.md.
 - [ ] Step 8: confirm ~3s autoMove resume.
-- [ ] Step 9: edge + flaky-comms robustness.
+- [ ] Step 9: edge + flaky-comms robustness (re-scope to ≥20in, not below).
 - [ ] (optional) Step 10: dual-eye if a second display is wired.
 - [ ] After verify: set CG_CALIB_RAW to 0 for quieter serial, update this file to
       VERIFIED, then unblock 09_IRIS_INTEGRATION_PLAN §6.
