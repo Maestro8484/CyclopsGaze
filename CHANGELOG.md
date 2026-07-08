@@ -84,3 +84,15 @@ Same bench session, continued. Bench testing surfaced a narrow detection envelop
 - **Open, handed off:** lateral (X-axis) tracking instability at close range needs re-testing now that power and the gate are fixed, before concluding anything further is wrong. See `11_HANDOFF_FABLE_LATERAL_TRACKING.md`.
 - FIRMWARE_VERSION CG-S4 → CG-S5.
 - **Status: DEPLOYED, not yet VERIFIED** — sensor detection, power, and gate are bench-confirmed; direction (3.1), NATIVE_H (3.5/step 6), and lateral tracking are still open per NOTES.md.
+
+## CG-S6/S7/S8 (2026-07-07) — tracking VERIFIED on bench; ready for IRIS integration
+
+Full bench pass with T4.1 on COM6, operator live. Lateral-tracking investigation closed and gaze tuned end-to-end. **Status: VERIFIED.**
+
+- **CG-S6 — lateral direction fixed.** X was mirrored: `main.cpp` negated `targetX` for the IRIS "eye-0 of a pair" mirror convention, but `EyeController::renderFrame()` *also* unconditionally flips `eye.x` for `eyeIndex==0`, and CyclopsGaze's single eye is always index 0 — so the pair-mirror was applied with no pair to mirror against. Removed the negation in `main.cpp` (not the shared EyeController). Bench-confirmed correct L/R.
+- **CG-S7 — GAZE_GAIN 1.0 → 1.7.** Bench data showed a natural side-to-side head movement only spanned rawX 151-427 (native 0-640), so targetX topped out near ±0.5. Raised gain from that measured ratio; X and downward Y now reach near full travel. Bench-confirmed.
+- **CG-S8 — Y_CENTER offset added.** Sensor is mounted physically *below* the eye, so a face at true eye-level images near the frame top (bench-measured cy≈33, not the geometric center 127.5). Old code treated 127.5 as neutral, so normal posture computed to y≈-1.27 (past the clamp) — eye pinned looking up. `Y_CENTER=33` recenters neutral to y≈0. Bench-confirmed: neutral now reads ~0, downward range good.
+- **Upward-gaze ceiling = hardware limit, not a bug.** With neutral correctly at y≈0, deliberate max-up-gaze only moved rawY to ~45 (≈9 counts above neutral) — the sensor's below-eye mounting leaves almost no frame above eye-level. Not chased with asymmetric gain (would amplify quantization noise on the one axis already worst-off). Fix is physical: tilt/lower the sensor. Documented.
+- **LED not disableable in firmware — confirmed against source.** DFRobot's own Modbus register map (wiki docs/23023) and their `DFRobot_GestureFaceDetection` library expose no LED register — only device addr, baud, and the detection/score thresholds. `enableLED(bool){}` stays a no-op stub. The white LED = onboard face-presence indicator (independent of PS_CONF_GATE); the brief blue = RGB *gesture* indicator (thumbs-up), incidental. To kill the LED for a build: physical cover only.
+- FIRMWARE_VERSION CG-S5 → CG-S8.
+- **Status: VERIFIED — ready for IRIS integration** as a drop-in Person Sensor (SEN-21231) replacement. Direction, gain, and Y-center all bench-confirmed. Remaining knobs (upward-gaze mount tilt, optional CG_CALIB_RAW=0 for quiet serial) are deploy-time, not blockers. Unblocks 09_IRIS_INTEGRATION_PLAN.

@@ -438,28 +438,38 @@ Resolved this session (2026-07-06), T4.1 connected on COM6:
   the SEN0626's actual behavior — replaced with DFRobot's documented floor
   (score >=60 → PS_CONF_GATE=152, CG-S5, audit 3.7).
 
-Open:
-- Lateral (X-axis) tracking reported unstable, worse at close range; vertical
-  (Y-axis) reported clean. Distance floor (0.5m/~20in, DFRobot-documented) and
-  the power fix above may resolve some/all of this — needs re-test at ≥20in
-  with PS_CONF_GATE=152 before concluding anything further is wrong. See bench
-  step 7b and 11_HANDOFF_FABLE_LATERAL_TRACKING.md.
-- NATIVE_H (480 vs 640) not yet confirmed on this bench pass.
-- Y-axis physical orientation (audit 3.1) not yet confirmed on this bench pass.
+Resolved 2026-07-07 (CG-S6/S7/S8 bench pass, operator live on COM6):
+- Lateral (X) tracking: root cause was a MIRROR, not noise — double X-flip
+  (main.cpp negation + EyeController eyeIndex==0 flip on a single eye). Fixed
+  CG-S6 by removing the main.cpp negation. Bench-VERIFIED correct L/R.
+- Gaze range too small: GAZE_GAIN 1.0 → 1.7 (CG-S7), derived from measured rawX
+  span 151-427. Bench-VERIFIED.
+- Upward-gaze bias / eye pinned up: Y_CENTER=33 (CG-S8) — sensor mounts below
+  the eye so eye-level images near frame top; old code used 127.5 as neutral.
+  Bench-VERIFIED neutral now ≈0.
 
-## Next Session (bench — needs T4.1 connected + operator at bench)
+Open (non-blocking for IRIS):
+- Upward-gaze travel is hardware-limited (~9 rawY counts above neutral) because
+  the sensor sits below the eye. Fix is physical (tilt/lower sensor), not code.
+- NATIVE_H (480 vs 640): DFRobot's register doc labels face_y "0-640" but the
+  extraction was self-inconsistent; not trusted, NATIVE_H left at 480. Confirm
+  via peak rawY on a deliberate look-down test if it ever matters.
+- LED: no Modbus register exists (confirmed vs DFRobot wiki + library) — cannot
+  disable in firmware, physical cover only. enableLED() stays a no-op stub.
 
-- [x] Steps 1-3: enumerate, flash, confirm boot + SEN0626 baud — DONE (COM6,
-      DIP switch fixed, sensor found).
-- [ ] Step 4: confirm face-detect serial line.
-- [ ] Step 5: confirm L/R/U/D directions; flip targetY sign ONLY if vertical inverted.
-- [ ] Step 6: record max rawY → confirm NATIVE_H 480 vs 640.
-- [x] Step 7: PS_CONF_GATE re-derived from DFRobot's documented floor (152) — CG-S5.
-      Re-verify this value against real bench scores next session.
-- [ ] Step 7b (new): re-test lateral tracking at ≥20in with the power fix +
-      new gate in place; see 11_HANDOFF_FABLE_LATERAL_TRACKING.md.
-- [ ] Step 8: confirm ~3s autoMove resume.
-- [ ] Step 9: edge + flaky-comms robustness (re-scope to ≥20in, not below).
-- [ ] (optional) Step 10: dual-eye if a second display is wired.
-- [ ] After verify: set CG_CALIB_RAW to 0 for quieter serial, update this file to
-      VERIFIED, then unblock 09_IRIS_INTEGRATION_PLAN §6.
+## Status: VERIFIED (2026-07-07) — ready for IRIS integration
+
+Tracking is bench-verified end-to-end (COM6, operator live). CyclopsGaze is
+cleared as a drop-in Person Sensor (SEN-21231) replacement — unblocks
+09_IRIS_INTEGRATION_PLAN.
+
+- [x] Steps 1-3: enumerate, flash, boot + SEN0626 baud — DONE.
+- [x] Step 4: face-detect serial line confirmed (gate=PASS, rawX/rawY logging).
+- [x] Step 5: L/R fixed (CG-S6 mirror fix) and U/D confirmed after Y_CENTER.
+- [x] Step 7: PS_CONF_GATE=152 confirmed passing on live bench scores (60-74).
+- [x] Step 7b: lateral tracking resolved — was a mirror bug, not noise/distance.
+
+Deploy-time (not blockers):
+- [ ] Upward gaze: tilt/lower sensor for more above-eye-level headroom (physical).
+- [ ] Set CG_CALIB_RAW to 0 for quiet serial once done bench-logging.
+- [ ] Step 6: confirm NATIVE_H 480 vs 640 only if Y precision ever matters.

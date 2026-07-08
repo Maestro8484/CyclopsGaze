@@ -1,6 +1,6 @@
 #pragma once
 
-static constexpr char FIRMWARE_VERSION[] = "CG-S5";
+static constexpr char FIRMWARE_VERSION[] = "CG-S8";
 
 #include "eyes/eyes.h"
 #include "eyes/240x240/nordicBlue.h"
@@ -30,8 +30,25 @@ static constexpr uint8_t PS_CONF_GATE = 152;
 // (production-tuned) gaze range. Raise (>1) to make the eye reach its travel
 // limits with a face nearer frame-center; lower (<1) to damp the range. The
 // controller clamps the result to the unit circle, so values >1 are safe
-// (audit 3.8).
-static constexpr float GAZE_GAIN = 1.0f;
+// (audit 3.8). CG-S7: bench data at gain=1.0 showed a natural side-to-side
+// head movement only reached rawX 151-427 (native 0-640, center 320), i.e.
+// targetX topped out around +/-0.5 instead of approaching +/-1 -- raised to
+// 1.7 (derived from that measured ratio) so the same physical movement drives
+// the eye closer to its full travel arc. Applies to Y too (shared constant).
+static constexpr float GAZE_GAIN = 1.7f;
+
+// CG-S8: box_top (cy, 0-255 remap of native rawY 0-480) at true neutral --
+// subject at 18-24in, looking directly and levelly at the eye -- bench-measured
+// at cy~33, not the frame's geometric center of 127.5. Root cause: the SEN0626
+// is mounted physically BELOW the eye display, so a face at normal eye-level
+// height images near the TOP of the sensor's frame rather than centered.
+// Without this, targetY treated cy=127.5 as "neutral," so normal viewing
+// posture computed to y=-1.27 (already past the +/-1 clamp) -- the eye was
+// pinned looking up regardless of actual face position. Y_CENTER shifts the
+// zero-point to the bench-measured value so GAZE_GAIN scales symmetrically
+// around true eye-level. Re-measure if the sensor's physical mounting height
+// relative to the eye changes.
+static constexpr float Y_CENTER = 33.0f;
 
 // Time with no qualifying face before autoMove (idle wander) resumes.
 static constexpr unsigned long FACE_LOST_MS = 3000;

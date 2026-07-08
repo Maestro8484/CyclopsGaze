@@ -45,15 +45,22 @@ void loop() {
 
   if (haveFace) {
     // box_left==box_right==cx and box_top==box_bottom==cy (center-only box), so
-    // these are the exact face center. Sign convention is byte-for-byte IRIS's
-    // production main.cpp (targetX negated for the eye-0 X-mirror; targetY NOT
-    // negated) -- verified correct, not inverted (audit 3.1). GAZE_GAIN scales
-    // the tracking range for bench tuning; setTargetPosition clamps to the unit
-    // circle so overshoot past +/-1 is safe (audit 3.8).
+    // these are the exact face center. CG-S6: the IRIS-matched targetX negation
+    // (audit 3.1) assumed the eye-0 "left eye of a pair" mirror convention --
+    // but EyeController::renderFrame() unconditionally flips eye.x whenever
+    // eyeIndex==0 (EyeController.h ~590), and CyclopsGaze's single eye is always
+    // eyeIndex 0 (only one eye in the array), so it was permanently getting that
+    // pair-mirror treatment despite having no second eye to mirror against.
+    // Bench-confirmed lateral tracking was mirrored; removing the negation here
+    // is the correct fix without touching the shared EyeController. GAZE_GAIN
+    // scales the tracking range for bench tuning; setTargetPosition clamps to
+    // the unit circle so overshoot past +/-1 is safe (audit 3.8).
     float cx = f.box_left;
     float cy = f.box_top;
-    float targetX = -((cx / 127.5f) - 1.0f) * GAZE_GAIN;
-    float targetY =  ((cy / 127.5f) - 1.0f) * GAZE_GAIN;
+    float targetX = ((cx / 127.5f) - 1.0f) * GAZE_GAIN;
+    // CG-S8: Y_CENTER (not 127.5) is the zero-point -- see config.h, the sensor
+    // is mounted below the eye so true eye-level images near the frame's top.
+    float targetY = ((cy - Y_CENTER) / 127.5f) * GAZE_GAIN;
 
     eyes->setAutoMove(false);
     eyes->setTargetPosition(targetX, targetY);
