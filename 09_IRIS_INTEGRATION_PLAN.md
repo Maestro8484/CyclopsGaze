@@ -151,11 +151,14 @@ on top of `SEN0626Sensor` (Serial1), preserving the `PersonResult` contract:
    way). Direction lives downstream in `updatePanFromFace()` and is **not** flipped
    in the adapter — fix it there if inverted, same as the old sensor.
 
-**Open hardware question for the deploy session (operator):** whether the physical
-IRIS had one Person Sensor or two (one per Teensy). Each node reads its bus
-independently in code; if a single sensor was shared, decide whether each Teensy
-gets its own SEN0626 on its own `Serial1` (simplest, matches this kit) or one
-sensor feeds both. This kit assumes one SEN0626 per consuming Teensy.
+**Hardware confirmed (operator, 2026-07-07):** IRIS has **two** physical Person
+Sensors — one on the T4.1 eyes node, one on the T4.0 servo/head node — both mounted
+on the platform (eyes + TFT mouth) facing outward-front. Each node reads its own
+sensor independently, exactly as the code shows. So the swap is **two independent
+1:1 replacements**: each Teensy gets its own SEN0626 on its own `Serial1`. This is
+precisely what the kit assumes — no shared-sensor arbitration needed. (Both sensors
+being co-located and front-facing, their coordinate/direction bench-verifies can be
+done together, but each node still tunes its own sign/bias/pan independently.)
 
 ## 5. Behavioral gaps + how each is handled
 
@@ -237,7 +240,7 @@ should be weighed before deploying, not discovered after. See NOTES.md
 - [ ] **Servo pan** — copy the servo adapter; verify pan direction in
       `updatePanFromFace()`; confirm hold-pan on no-face.
 - [ ] **AutoMove / lost-timeout** — eyes resume ~3 s after face leaves frame.
-- [ ] **One-vs-two sensors** — confirm the physical sensor count per Teensy (§4b).
+- [x] **Sensor count** — confirmed two sensors, one per Teensy (§4b); kit matches.
 
 Deploying an unproven sensor design into the live IRIS T4.1 is exactly the "refactor of an unproven design = wasted motion" the handoff warns against. **Live IRIS keeps the working Person Sensor as source of truth until CyclopsGaze is VERIFIED on the bench** (NOTES.md posture; memory `person_sensor_irreplaceable`).
 
