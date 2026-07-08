@@ -96,3 +96,15 @@ Full bench pass with T4.1 on COM6, operator live. Lateral-tracking investigation
 - **LED not disableable in firmware — confirmed against source.** DFRobot's own Modbus register map (wiki docs/23023) and their `DFRobot_GestureFaceDetection` library expose no LED register — only device addr, baud, and the detection/score thresholds. `enableLED(bool){}` stays a no-op stub. The white LED = onboard face-presence indicator (independent of PS_CONF_GATE); the brief blue = RGB *gesture* indicator (thumbs-up), incidental. To kill the LED for a build: physical cover only.
 - FIRMWARE_VERSION CG-S5 → CG-S8.
 - **Status: VERIFIED — ready for IRIS integration** as a drop-in Person Sensor (SEN-21231) replacement. Direction, gain, and Y-center all bench-confirmed. Remaining knobs (upward-gaze mount tilt, optional CG_CALIB_RAW=0 for quiet serial) are deploy-time, not blockers. Unblocks 09_IRIS_INTEGRATION_PLAN.
+
+## CG-S9 (2026-07-07) — IRIS integration: code-review pass + both-consumer drop-ins
+
+Code-reviewed the drop-in against IRIS's *actual* source (read-only) and closed the gaps. No CyclopsGaze tracking behavior changed — tracking stays VERIFIED (CG-S8). Adapters are REPO-ONLY for IRIS until a deploy session flashes them.
+
+- **Found a second consumer the eyes-only plan missed.** The dead Person Sensor drove TWO nodes: T4.1 eyes (`PersonSensor` class, X+Y) **and** the T4.0 servo head-pan node (`setupPersonSensor()`/`pollPersonSensor()` → `PersonResult`, X-only). The class shim only covers the eyes.
+- **New servo adapter:** `integration/servo_teensy40_base_mount/person_sensor.{h,cpp}` — SEN0626-backed reimplementation of the servo's `PersonResult` contract (Serial1, `faceCenterX=(box_left+box_right)/2` in 0-255, conf gate 152 = DFRobot score≥60, facing always-true). The servo `.ino` is unchanged.
+- **Eyes method-surface audit:** IRIS calls only `isPresent/read/setMode/enableID/enableLED/faceDetails/numFacesFound/timeSinceFaceDetectedMs` — all present; the shim's missing `singleShot/labelNextID/persistIDs/eraseIDs` are never called. Struct byte-identical.
+- **Closed the `begin()` gap:** the real `PersonSensor` has no `begin()`; IRIS probes via `isPresent()`. `SEN0626Sensor::isPresent()` now lazily runs `begin()` (UART bring-up + baud detect) so IRIS's probe loop works with no added call. Standalone unaffected (main.cpp calls begin() explicitly).
+- **Two IRIS-side warnings documented, not baked in:** (1) do NOT propagate CG-S6 targetX negation-removal or CG-S8 `Y_CENTER` to IRIS — IRIS keeps its own negation + runtime `psYBias`; (2) confidence-scale mismatch — IRIS `psConfGate` is capped 0-100 but `box_confidence` is 0-255, so the eyes gate is currently inert; recommended fix (emit raw 0-100) flagged as an operator decision requiring a CyclopsGaze re-verify.
+- Added `integration/README.md`; expanded `09_IRIS_INTEGRATION_PLAN.md` (§2 audit, §4 warnings, new §4b servo, §5 confidence math, §6 gate → IRIS-side).
+- FIRMWARE_VERSION CG-S8 → CG-S9 (drop-in-only `isPresent()` change; tracking untouched → still VERIFIED).

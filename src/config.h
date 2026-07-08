@@ -1,6 +1,6 @@
 #pragma once
 
-static constexpr char FIRMWARE_VERSION[] = "CG-S8";
+static constexpr char FIRMWARE_VERSION[] = "CG-S9";
 
 #include "eyes/eyes.h"
 #include "eyes/240x240/nordicBlue.h"

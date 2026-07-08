@@ -2,6 +2,25 @@
 
 Written for a **later** IRIS deploy session. Nothing here is deployed or flashed by the session that wrote this doc (IRIS HANDOFF C, 2026-07-04). This is the architecture + step plan the operator approved; execute it only when the bench-verify prerequisites below are green and the operator says DEPLOY.
 
+> **CG-S8 update (2026-07-07) — code-review pass against live IRIS, both consumers.**
+> CyclopsGaze tracking is now **VERIFIED** on the bench, and the integration was
+> code-reviewed against IRIS's actual source. Key results folded into the sections
+> below:
+> - **There are TWO consumers, not one.** T4.1 eyes (`PersonSensor` class, X+Y) AND
+>   the T4.0 servo head-pan node (`setupPersonSensor()`/`pollPersonSensor()` →
+>   `PersonResult`, X-only). The class shim only covers the eyes; the servo needs
+>   its own adapter — now provided in `integration/servo_teensy40_base_mount/`.
+> - **Eyes method surface confirmed sufficient:** IRIS calls only
+>   `isPresent/read/setMode/enableID/enableLED/faceDetails/numFacesFound/timeSinceFaceDetectedMs`
+>   — all present. `isPresent()` now lazily runs `begin()`, so IRIS's probe loop
+>   needs no added `begin()` call.
+> - **Do NOT propagate CyclopsGaze's CG-S6 targetX change or CG-S8 `Y_CENTER` to
+>   IRIS.** They are single-eye / bench-mount specific. IRIS keeps its own targetX
+>   negation and its runtime `psYBias` (§4, §5).
+> - **Confidence scale is the one real behavior decision (§5).** IRIS's `psConfGate`
+>   is constrained 0–100 but compared to `box_confidence`; the shim emits 0–255.
+> - Ready-to-copy files + per-consumer steps: `integration/README.md`.
+
 ---
 
 ## 1. Decision on record (IRIS HANDOFF C, 2026-07-04)
@@ -23,6 +42,18 @@ Why the drop-in over the bridge: it is the simplest thing to **replicate publicl
 - Method surface: `begin() / isPresent() / read() / enableID() / setMode() / enableLED() / numFacesFound() / faceDetails(i) / timeSinceFaceDetectedMs()` — identical signatures. The no-op methods (`enableID`, `setMode`, `enableLED`) keep IRIS call sites compiling and behaving.
 
 So at the **software** layer, IRIS's existing `reportFaceState()` loop (`src/main.cpp`, the `personSensor.read()` → iterate `faceDetails(i)` → `setTargetPosition()` block) works against the shim unchanged. The real integration work is the **physical bus** difference plus a few IRIS-side edits, below.
+
+**Method-surface audit (CG-S8, verified against live IRIS `src/main.cpp`).** IRIS
+calls exactly these on `personSensor`, and all are present in the shim:
+`isPresent` (×2), `read`, `setMode` (×2), `enableID` (×2), `enableLED` (×2),
+`faceDetails` (×2), `numFacesFound` (×2), `timeSinceFaceDetectedMs` (×2). It does
+**not** call `singleShot/labelNextID/persistIDs/eraseIDs`, so the shim not having
+those is harmless. The struct `person_sensor_face_t` is byte-identical (same 8
+fields incl. `is_facing`). **One gap closed:** the real `PersonSensor` has no
+`begin()` — IRIS brings the sensor up by calling `isPresent()` in a probe loop
+(`main.cpp` ~498/539). The shim's `isPresent()` now lazily runs `begin()` (UART
+bring-up + baud auto-detect) until the sensor answers, so that loop works with
+**no added `begin()` call**. Once present it short-circuits.
 
 ---
 
@@ -53,15 +84,86 @@ Touch only what's listed. All paths are in the IRIS repo (`C:\Users\SuperMaster\
 5. **`src/config.h`** — `USE_PERSON_SENSOR` stays the master enable; bump `FIRMWARE_VERSION` to the deploy session tag before flashing (per IRIS CLAUDE.md).
 6. **Nothing on the Pi4.** No bridge, no udev, no service, no WebUI route. This is the whole point of the drop-in. (The IRIS S184 cleanup already removed the old OGLE Pi4 surface.)
 
+**Line numbers verified CG-S8:** `main.cpp:14` (`#include "sensors/PersonSensor.h"`) and `main.cpp:116` (`PersonSensor personSensor(Wire);`) are still exact. The target math is `main.cpp:594-596`.
+
+> **⚠ Do NOT copy CyclopsGaze's CG-S6 / CG-S8 tracking edits into IRIS.**
+> IRIS's eyes math (`main.cpp:594-596`) is:
+> ```cpp
+> float targetX = -((box_left + (box_right-box_left)/2.0f)/127.5f - 1.0f);   // negated
+> float targetY =  ((box_top  + (box_bottom-box_top)/3.0f)/127.5f - 1.0f) + psYBias;
+> ```
+> - CG-S6 **removed** the `targetX` negation in *CyclopsGaze* because its single
+>   eye is always `eyeIndex==0` and `EyeController::renderFrame()` unconditionally
+>   flips `eye.x` for eye 0 — a double flip. IRIS's eye config keeps the negation
+>   as its own field-proven convention. **Leave IRIS's negation in place** and
+>   bench-verify L/R direction on the actual IRIS eyes; flip in IRIS `main.cpp`
+>   only if that bench check shows it inverted.
+> - CG-S8 added `Y_CENTER=33` in CyclopsGaze because its sensor is mounted below
+>   the eye. IRIS already has the equivalent knob: **`psYBias`** (runtime, via
+>   `PS_CFG:YBIAS`). Since SEN0626 returns a center-only box, IRIS's
+>   `(box_bottom-box_top)/3.0f` term is 0, so `targetY = (cy/127.5 - 1) + psYBias`.
+>   Trim `psYBias` on the bench for the sensor's mount height — no code change.
+
 ---
+
+## 4b. Second consumer: the T4.0 servo head-pan node
+
+The eyes are not the only thing the dead Person Sensor drove. The servo base-mount
+Teensy 4.0 (`servo_teensy40/teensy40_base_mount/`) reads its **own** Person Sensor
+to pan the head toward a face. It does **not** use the `PersonSensor` class — it
+has a separate C-style driver `person_sensor.{h,cpp}` exposing:
+
+```cpp
+struct PersonResult { bool ok; bool faceVisible; float faceCenterX; uint8_t confidence; bool isFacing; };
+void setupPersonSensor();
+PersonResult pollPersonSensor();
+```
+
+and the `.ino` consumes it (verified `teensy40_base_mount.ino:105-110`):
+
+```cpp
+PersonResult ps = pollPersonSensor();
+if (!ps.ok) return;                       // short read / throttle -> hold pan
+if (ps.faceVisible) updatePanFromFace(ps.faceCenterX);   // faceCenterX in 0-255
+```
+
+So the class shim does **not** cover this node. A matching SEN0626 adapter is
+provided: **`integration/servo_teensy40_base_mount/person_sensor.{h,cpp}`**. It
+reimplements `setupPersonSensor()`/`pollPersonSensor()`/`setPersonSensorLed()`
+on top of `SEN0626Sensor` (Serial1), preserving the `PersonResult` contract:
+
+- `ok` = a fresh sample was taken (SEN0626's internal 150 ms throttle → `ok=false`
+  between samples → the `.ino` holds pan, exactly the old short-read behavior).
+- `faceCenterX = (box_left+box_right)/2` — identical formula, same 0-255 space; the
+  center-only box makes it the exact center.
+- Gate: `box_confidence > 152` (raw score ≥60, DFRobot floor). The old driver
+  gated `boxConfidence < 60` on the Useful Sensors 0-255 scale (~24%); the new
+  gate is stricter and vendor-derived. Facing is always satisfied (no SEN0626
+  facing bit; matches IRIS `psFacingRequired=false`).
+
+**Servo-side edits (deploy session):**
+1. Copy `src/sensors/SEN0626Sensor.{h,cpp}` into `servo_teensy40/teensy40_base_mount/`.
+2. Replace that folder's `person_sensor.{h,cpp}` with the two `integration/` files.
+   The `.ino` is unchanged.
+3. Wire SEN0626 to the T4.0's `Serial1`. Leave the `.ino`'s `Wire.begin()` — the
+   paj7620 gesture sensor still uses I2C; only the Person Sensor moves to UART.
+4. Bench-verify pan direction (a face at image-left must pan the head the correct
+   way). Direction lives downstream in `updatePanFromFace()` and is **not** flipped
+   in the adapter — fix it there if inverted, same as the old sensor.
+
+**Open hardware question for the deploy session (operator):** whether the physical
+IRIS had one Person Sensor or two (one per Teensy). Each node reads its bus
+independently in code; if a single sensor was shared, decide whether each Teensy
+gets its own SEN0626 on its own `Serial1` (simplest, matches this kit) or one
+sensor feeds both. This kit assumes one SEN0626 per consuming Teensy.
 
 ## 5. Behavioral gaps + how each is handled
 
 | Gap | Detail | Resolution |
 |-----|--------|-----------|
 | **`is_facing` has no SEN0626 equivalent** | Shim hardcodes `is_facing = 1` (NOTES.md §"No is_facing field"). | **Non-blocking for live IRIS:** `psFacingRequired` defaults **false** since IRIS S153c (`main.cpp:146` — the real PS `is_facing` bit flickered and dropped locks, so facing-gating was turned off as the durable fix). With FACING off, IRIS never reads `is_facing`, so hardcoded-true is harmless. **If** the operator ever re-enables `PS_CFG:FACING=1`, derive a real facing flag from SEN0626 head-pose/gesture registers first — otherwise every detection counts as "facing." |
-| **Confidence scale** | Shim emits `box_confidence = score × 255 / 100` (0..255). IRIS gates with `face.box_confidence > psConfGate`, and **CONF=60 is the operator's long-standing intentional setting** (memory `project_ps_conf_operator_setting`; S157b was wrong to change it). | **Bench-verify before trusting the gate.** Confirm the real Person Sensor's `box_confidence` was on the same 0..255 scale the shim emits. If the real PS reported 0..100, then CONF=60 was calibrated against 0..100 and the shim's ×255/100 rescale would make the gate far too permissive. Fix by matching the shim's output scale to whatever CONF=60 was calibrated against — **do not** silently change CONF; confirm with the operator (per `project_ps_conf_operator_setting`). |
-| **Coordinate mapping / flips** | Shim maps SEN0626 640×480 → 0..255 box space (`cx = faceX·255/640`, `cy = faceY·255/480`) storing center in both box edges. IRIS `main.cpp` computes `targetX/targetY` from box coords with its own sign/mirror. | Bench-verify direction: a face at image-left must pull the eyes the correct way (L/R **and** U/D). If inverted, flip the sign in IRIS `main.cpp` target math (same knob the old PS used), not in the shim. Also confirm SEN0626 native Y resolution (480 assumed, unverified — NOTES.md). |
+| **Confidence scale (THE decision — verify first)** | Shim emits `box_confidence = score × 255 / 100` (0..255). CG-S8 read the live IRIS gate: `main.cpp:562` gates `face.box_confidence > psConfGate`, and `psConfGate` is **`constrain((int)val, 0, 100)`** (`main.cpp:393`) — capped at 100 — default 45 (`main.cpp:145`). So IRIS's gate can never exceed 100, while the shim's value ranges 0..255. A real SEN0626 detection (raw score 60–90 → box_confidence 153–229) sails past any 0..100 gate: **the operator's CONF knob becomes inert on the eyes.** | **This is the one behavior choice to make before deploy — recommendation: emit raw score (0..100) from the shim** so IRIS's 0..100 `psConfGate` works as intended and `CONF=60` means exactly DFRobot's "score ≥60" floor. That change also requires setting CyclopsGaze's own `PS_CONF_GATE` from 152→60 and a re-verify (it would de-VERIFY the current 0..255 build). The servo adapter side-steps this (it gates on the 0..255 value directly at 152). **Do not flip the scale silently** — it changes CyclopsGaze's verified build; confirm with the operator, then re-bench (per `project_ps_conf_operator_setting`). Until then the eyes effectively track any sensor-reported face, which is acceptable because SEN0626 only emits faces above its own internal floor. |
+| **Coordinate mapping / flips** | Shim maps SEN0626 640×480 → 0..255 box space (`cx = faceX·255/640`, `cy = faceY·255/480`) storing center in both box edges. IRIS `main.cpp:594-596` computes `targetX` (negated) / `targetY` (+`psYBias`) with its own sign/mirror. | **Keep IRIS's existing negation + `psYBias`; do not import CyclopsGaze's CG-S6/S8 values** (§4 warning). Bench-verify direction on IRIS: a face at image-left must pull the eyes the correct way (L/R **and** U/D). If inverted, flip in IRIS target math, not the shim. Trim `psYBias` for mount height. CyclopsGaze itself bench-proved the shim's coords are sane (CG-S6/S7/S8 VERIFIED), so any residual is IRIS-side sign/bias only. Native Y res (480 assumed) still unconfirmed — NOTES.md; only matters for Y precision. |
 | **LED liveness** | Shim `enableLED()` is a no-op; SEN0626 has no PS-style status LED. | Cosmetic only. IRIS PSLED behavior (`main.cpp:398/507`) becomes a no-op; no functional impact. |
 | **`timeSinceFaceDetectedMs` / lost-timeout** | Shim tracks this and IRIS uses it for the auto-move-resume timeout (`main.cpp:597`). | Works as-is; confirm the ~3 s resume feel on the bench and tune `psLostMs` if needed. |
 
@@ -69,9 +171,12 @@ Touch only what's listed. All paths are in the IRIS repo (`C:\Users\SuperMaster\
 
 ## 6. Prerequisites before any IRIS deploy (gate)
 
-CyclopsGaze is still **REPO-ONLY** — CG-S3 builds clean for T4.1 (single-eye and
-`-DDUAL_EYE`) but has **not** been flashed or bench-verified (no T4.1 was
-connected during CG-S1/S2/S3). The gate stays **RED** until the bench pass runs.
+**CG-S8 (2026-07-07): CyclopsGaze tracking is VERIFIED on the bench.** The standalone
+sensor+eye path is proven — lateral direction, gaze gain, and Y-center all
+bench-confirmed on the T4.1 at COM6 (CHANGELOG CG-S6/S7/S8, NOTES.md). The remaining
+gate items below are now **IRIS-side integration checks**, not CyclopsGaze unknowns.
+The two drop-in adapters are code-reviewed against live IRIS source but are
+**REPO-ONLY for IRIS** until a deploy session flashes and benches them.
 
 **What CG-S3 already unblocked (code-side, no bench needed):**
 - The tracking-chain **audit is done** and fixes landed (NOTES.md §"CG-S3 Audit").
@@ -114,18 +219,25 @@ downgrade for this specific use case** — not something tuning can fix — and
 should be weighed before deploying, not discovered after. See NOTES.md
 "External research" for the full sourcing.
 
-**Still RED — must be VERIFIED on the bench before touching IRIS** (NOTES.md bench protocol):
+**CyclopsGaze standalone — DONE (CG-S6/S7/S8, bench-verified 2026-07-07):**
 
-- [ ] Confirm native Y resolution (480 vs 640) via `rawY` max (step 6).
-- [ ] Confirm `[CG] faces=1 ...` on a real face; eye tracks L/R/U/D (flip
-      targetY sign only if vertical inverted); AutoMove resumes ~3 s after the
-      face leaves frame (steps 4/5/8).
-- [ ] **Lateral (X-axis) tracking:** operator reports unstable horizontal
-      tracking, worse at close range, vs. clean vertical tracking. Re-test at
-      ≥20in (inside the documented floor) with the power fix and new gate in
-      place before concluding anything further is wrong (step 7b,
-      11_HANDOFF_FABLE_LATERAL_TRACKING.md).
-- [ ] Re-verify PS_CONF_GATE=152 against real bench scores (step 7).
+- [x] `[CG] faces=1 ...` on a real face; eye tracks L/R (CG-S6 mirror fix) and
+      U/D (CG-S8 Y-center); PS_CONF_GATE=152 confirmed passing on live scores 60–74.
+- [x] Lateral (X) tracking resolved — was a mirror double-flip, not noise/distance.
+- [ ] Native Y resolution (480 vs 640) still unconfirmed — non-blocking, only
+      affects Y precision (NOTES.md).
+
+**IRIS-side — must be bench-verified during the deploy session, on the SPARE Teensies:**
+
+- [ ] **Confidence-scale decision (§5)** — pick raw-0..100 vs 0..255 emission and
+      set the eyes `psConfGate` / shim accordingly; re-verify CyclopsGaze if the
+      shim scale changes.
+- [ ] **Eyes direction/bias** — keep IRIS's targetX negation; verify L/R + U/D on
+      the real IRIS eyes; trim `psYBias` for mount height (do NOT import CG-S6/S8).
+- [ ] **Servo pan** — copy the servo adapter; verify pan direction in
+      `updatePanFromFace()`; confirm hold-pan on no-face.
+- [ ] **AutoMove / lost-timeout** — eyes resume ~3 s after face leaves frame.
+- [ ] **One-vs-two sensors** — confirm the physical sensor count per Teensy (§4b).
 
 Deploying an unproven sensor design into the live IRIS T4.1 is exactly the "refactor of an unproven design = wasted motion" the handoff warns against. **Live IRIS keeps the working Person Sensor as source of truth until CyclopsGaze is VERIFIED on the bench** (NOTES.md posture; memory `person_sensor_irreplaceable`).
 

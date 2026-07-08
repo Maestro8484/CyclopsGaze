@@ -44,7 +44,15 @@ public:
   explicit SEN0626Sensor(HardwareSerial &serial);
 
   bool begin();
-  bool isPresent() { return present; }
+  // Drop-in note (IRIS integration): the Useful Sensors PersonSensor this shim
+  // replaces has NO begin() -- IRIS's detect loop probes the bus by calling
+  // isPresent() directly (main.cpp ~498/539). So isPresent() lazily runs begin()
+  // (UART bring-up + baud auto-detect) until the sensor answers, making the
+  // existing IRIS probe loop work UNCHANGED with no added begin() call. Once
+  // present it short-circuits. CyclopsGaze's own main.cpp still calls begin()
+  // explicitly in setup(), so this is a no-op for the standalone path. begin()'s
+  // internal BAUD_ATTEMPTS sweep replaces the loop's external ret/recover retry.
+  bool isPresent() { if (!present) begin(); return present; }
   bool read();
   void enableID(bool) {}
   void setMode(Mode) {}

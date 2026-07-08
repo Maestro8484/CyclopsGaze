@@ -473,3 +473,17 @@ Deploy-time (not blockers):
 - [ ] Upward gaze: tilt/lower sensor for more above-eye-level headroom (physical).
 - [ ] Set CG_CALIB_RAW to 0 for quiet serial once done bench-logging.
 - [ ] Step 6: confirm NATIVE_H 480 vs 640 only if Y precision ever matters.
+
+## IRIS integration (CG-S9, 2026-07-07)
+
+Code-reviewed both IRIS consumers of the dead Person Sensor and produced drop-ins.
+Details in 09_IRIS_INTEGRATION_PLAN.md + integration/README.md. Summary:
+- T4.1 eyes: `src/sensors/SEN0626Sensor.{h,cpp}` is the class drop-in; method
+  surface + struct verified against live IRIS. `isPresent()` now lazy-begins so
+  IRIS's probe loop needs no `begin()` edit.
+- T4.0 servo: new `integration/servo_teensy40_base_mount/person_sensor.{h,cpp}`
+  reimplements the servo's `PersonResult` interface on SEN0626 (Serial1).
+- Two operator decisions flagged (NOT auto-applied): confidence scale (IRIS
+  psConfGate capped 0-100 vs shim 0-255) and eyes direction/psYBias. Do NOT copy
+  CyclopsGaze's CG-S6/CG-S8 tracking edits into IRIS.
+- IRIS adapters are REPO-ONLY until an IRIS deploy session flashes/benches them.
