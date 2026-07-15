@@ -487,3 +487,36 @@ Details in 09_IRIS_INTEGRATION_PLAN.md + integration/README.md. Summary:
   psConfGate capped 0-100 vs shim 0-255) and eyes direction/psYBias. Do NOT copy
   CyclopsGaze's CG-S6/CG-S8 tracking edits into IRIS.
 - IRIS adapters are REPO-ONLY until an IRIS deploy session flashes/benches them.
+
+## CG-S10 (2026-07-15) — camera module is physically separable from the main PCB
+
+**Bench finding, not yet firmware/software related — a mechanical discovery.** The SEN0626's
+camera lens/sensor assembly attaches to the Gravity breakout via a ribbon cable and
+double-sided tape, not a fixed/soldered connection.
+
+Bench-tested with the camera sensor **disconnected from the main SEN0626 board** (the
+board's head-shoulder indicator LED, gesture RGB LED, and any IR-adjacent component were
+not present/connected). Face identification and tracking output functioned correctly with
+only the camera sensor + ribbon in place.
+
+**Confirmed NOT required for face detect/track:**
+- Head-shoulder indicator LED (white)
+- Gesture indicator LED (RGB)
+- Any IR-associated component mounted alongside the lens on the main board
+
+**Why this matters:** the full Gravity board footprint has been the physical objection to
+SEN0626 as a Person Sensor (SEN-21231) drop-in — the original is tiny, the Gravity breakout
+is not. If the camera + ribbon alone is sufficient, SEN0626 can be mounted in a footprint
+closer to the original sensor's, without carrying the rest of the board. This strengthens
+both of CyclopsGaze's reasons for existing (§ Purpose above): insurance if IRIS's live
+Person Sensor ever fails, and the public-launch replicability recipe (09_IRIS_INTEGRATION_PLAN.md §8).
+
+**Open before calling this VERIFIED:** confirm the detached camera sensor still reports
+through the **same I2C/UART register set, same device address, same baud rate** once
+separated from the main board. If any board-side circuitry (beyond the LEDs/IR components
+already ruled out above) was doing signal conditioning for the camera link, register reads
+could differ once relocated. Test raw register output side-by-side (attached vs. detached)
+before finalizing the swap — same protocol as the existing `CG_CALIB_RAW` bench logging
+(§ SEN0626 Protocol above).
+
+**Status: REPO-ONLY bench finding — not yet flashed or integrated into firmware.**

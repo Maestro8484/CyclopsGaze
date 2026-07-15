@@ -218,6 +218,24 @@ shared SPI0 pins (11, 13) never touch pins 0/1.
 
 ---
 
+## Compact Mounting — Detached Camera Module (bench finding, UNVERIFIED, 2026-07-15)
+
+The SEN0626's camera lens/sensor sits on the Gravity board via a ribbon cable +
+double-sided tape, not solder — it is physically separable from the rest of the
+board. Bench-tested with the camera disconnected from the main board (head-shoulder
+LED, gesture RGB LED, and IR-adjacent components all absent/disconnected): face
+detect/track still worked through the ribbon alone.
+
+**Do not build to this yet.** It is NOT confirmed that the detached camera answers
+on the same I2C/UART register set, device address, and baud once separated from the
+main board's circuitry — if any board-side component was doing signal conditioning
+for the camera link, register reads could change post-separation. Compare raw
+register output side-by-side (camera attached vs. detached) before treating this as
+a real mounting option. See `NOTES.md` CG-S10 for the full finding and
+`09_IRIS_INTEGRATION_PLAN.md` §8 for why it matters to public replicability.
+
+---
+
 ## Quick Sanity Check Before First Flash
 
 - Display VCC and sensor VCC both on 3.3V (not 5V)
