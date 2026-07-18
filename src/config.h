@@ -1,6 +1,6 @@
 #pragma once
 
-static constexpr char FIRMWARE_VERSION[] = "CG-S9";
+static constexpr char FIRMWARE_VERSION[] = "CG-S12";
 
 #include "eyes/eyes.h"
 #include "eyes/240x240/nordicBlue.h"
@@ -10,45 +10,46 @@ static constexpr char FIRMWARE_VERSION[] = "CG-S9";
 #include "displays/GC9A01A_Display.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tracking tunables (bench-adjustable — see NOTES.md bench protocol)
+// Tracking tunables (bench-adjustable — see docs/BENCH_PROTOCOL.md)
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Confidence gate. A face must report box_confidence > PS_CONF_GATE to be
-// tracked. CG-S5: raised from 45 to 152, derived from DFRobot's OWN documented
-// threshold for this sensor family -- the SEN0626 wiki setup guide
-// (wiki.dfrobot.com/sen0626/docs/23024) states "a score >=60 is considered
-// valid" and its sample code calls gfd.setFaceDetectThres(60). The CG-S3
-// default of 45 (box_confidence, matching IRIS's own unrelated psConfGate
-// constant) mapped to a raw SEN0626 score of just ~19/100 -- roughly a third of
-// the vendor's own validity floor, likely accepting noisy/marginal detections.
-// 152 = floor(60*255/100) - 1, so with strict '>' a raw score of exactly 60
-// passes and 59 does not. Lower only if bench data shows DFRobot's own
-// threshold is too strict for this specific unit (audit 3.7).
-static constexpr uint8_t PS_CONF_GATE = 152;
+// tracked. CG-S12 (⚠ UNVERIFIED, re-bench #1 priority): moved 152 -> 60 because
+// SEN0626Sensor now emits the RAW DFRobot score (0-100), not the old 0-255 remap
+// (see SEN0626Sensor.cpp CG-S12 note). 60 IS DFRobot's own documented validity
+// floor -- the SEN0626 wiki setup guide (wiki.dfrobot.com/sen0626/docs/23024)
+// states "a score >=60 is considered valid" and its sample code calls
+// gfd.setFaceDetectThres(60). With strict '>' a raw score of 60 passes and 59
+// does not. This is the SAME effective threshold as the old bench-VERIFIED
+// 152/255 (≈0.60) -- only the scale changed -- but it has NOT been re-observed on
+// the bench since the change. Lower only if bench data shows the vendor floor is
+// too strict for this specific unit (audit 3.7).
+static constexpr uint8_t PS_CONF_GATE = 60;
 
-// Multiplies targetX/targetY before setTargetPosition. 1.0 = the IRIS-matched
-// (production-tuned) gaze range. Raise (>1) to make the eye reach its travel
-// limits with a face nearer frame-center; lower (<1) to damp the range. The
-// controller clamps the result to the unit circle, so values >1 are safe
-// (audit 3.8). CG-S7: bench data at gain=1.0 showed a natural side-to-side
-// head movement only reached rawX 151-427 (native 0-640, center 320), i.e.
-// targetX topped out around +/-0.5 instead of approaching +/-1 -- raised to
-// 1.7 (derived from that measured ratio) so the same physical movement drives
-// the eye closer to its full travel arc. Applies to Y too (shared constant).
-static constexpr float GAZE_GAIN = 1.7f;
-
-// CG-S8: box_top (cy, 0-255 remap of native rawY 0-480) at true neutral --
-// subject at 18-24in, looking directly and levelly at the eye -- bench-measured
-// at cy~33, not the frame's geometric center of 127.5. Root cause: the SEN0626
-// is mounted physically BELOW the eye display, so a face at normal eye-level
-// height images near the TOP of the sensor's frame rather than centered.
-// Without this, targetY treated cy=127.5 as "neutral," so normal viewing
-// posture computed to y=-1.27 (already past the +/-1 clamp) -- the eye was
-// pinned looking up regardless of actual face position. Y_CENTER shifts the
-// zero-point to the bench-measured value so GAZE_GAIN scales symmetrically
-// around true eye-level. Re-measure if the sensor's physical mounting height
-// relative to the eye changes.
-static constexpr float Y_CENTER = 33.0f;
+// ── Per-axis signed gain + bias (CG-S12, synced from IRIS S212c) ─────────────
+// Gaze shaping model: targetN = rawN * GAIN + BIAS, where rawN = (cN/127.5)-1 is
+// the sensor-space target in [-1,+1] (cN = box center on the shim's 0-255 scale).
+// The SIGN of the gain sets direction and the MAGNITUDE sets range, so one knob
+// covers both "it's mirrored" and "it barely moves". setTargetPosition clamps the
+// result to the unit circle, so |gain|>1 saturates gracefully (audit 3.8).
+//
+// ⚠ UNVERIFIED (re-bench #1 priority). This replaced the single GAZE_GAIN + the
+// Y_CENTER offset with IRIS's proven per-axis model. The defaults below are
+// algebraically equal to the old bench-VERIFIED CG-S6/S7/S8 behavior:
+//   * X_GAIN = +1.7  positive = un-mirrored. CG-S6 removed the targetX negation
+//     (CyclopsGaze's single eye is eyeIndex 0, which EyeController already
+//     X-flips), and CG-S7 set the 1.7 magnitude from a measured rawX span.
+//   * Y_GAIN = +1.7, Y_BIAS = +1.26  together reproduce the old CG-S8
+//     Y_CENTER=33 below-eye-mount compensation exactly:
+//       old:  ((cy-33)/127.5)*1.7
+//       new:  ((cy/127.5)-1)*1.7 + 1.26   [1.26 = 1.7*(1 - 33/127.5)]
+//     i.e. a face at true eye level (cy≈33) still maps to targetY≈0. Re-measure
+//     Y_BIAS if the sensor's mount height relative to the eye changes.
+//   * X_BIAS = 0  horizontal centering offset; 0 = symmetric.
+static constexpr float GAZE_X_GAIN = 1.7f;
+static constexpr float GAZE_Y_GAIN = 1.7f;
+static constexpr float GAZE_X_BIAS = 0.0f;
+static constexpr float GAZE_Y_BIAS = 1.26f;
 
 // Time with no qualifying face before autoMove (idle wander) resumes.
 static constexpr unsigned long FACE_LOST_MS = 3000;
@@ -65,7 +66,7 @@ static constexpr unsigned long FACE_LOST_MS = 3000;
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // DUAL_EYE: uncomment to drive a second GC9A01A. Single-eye is the default and
-// needs no define. See 05_WIRING.md "Dual-Eye (optional)" for the pin table.
+// needs no define. See docs/WIRING.md "Dual-Eye (optional)" for the pin table.
 //
 // Why both eyes share SPI0 (MOSI 11 / SCK 13) instead of the IRIS-style second
 // bus: on this board Serial1 (SEN0626) already owns pins 0 and 1. Teensy 4.1's

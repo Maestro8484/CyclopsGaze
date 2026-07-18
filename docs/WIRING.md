@@ -30,7 +30,7 @@ DFRobot documents the SEN0626's detection range as **0.5–3 m (~19.7in–~9.8ft
 for both gesture and face recognition — this is the vendor's own spec, not a
 CyclopsGaze limitation. Mount it so a face is expected to sit **at least ~20
 inches** from the lens; closer than that is out-of-spec and tracking
-instability there is expected sensor behavior, not a bug. See NOTES.md
+instability there is expected sensor behavior, not a bug. See ENGINEERING_LOG.md
 "External research" for sourcing and how this compares to the Person Sensor.
 
 ---
@@ -159,7 +159,7 @@ No USB-UART adapter needed. Firmware auto-detects baud rate on first boot:
 4. Retries the whole sweep up to 3 times so a cold sensor that misses the first
    probe is still found (`BAUD_ATTEMPTS`, CG-S3).
 5. Prints the confirmed baud rate + attempt number to the serial monitor.
-6. Document the confirmed baud rate in NOTES.md.
+6. Document the confirmed baud rate in ENGINEERING_LOG.md.
 
 ---
 
@@ -231,8 +231,8 @@ on the same I2C/UART register set, device address, and baud once separated from 
 main board's circuitry — if any board-side component was doing signal conditioning
 for the camera link, register reads could change post-separation. Compare raw
 register output side-by-side (camera attached vs. detached) before treating this as
-a real mounting option. See `NOTES.md` CG-S10 for the full finding and
-`09_IRIS_INTEGRATION_PLAN.md` §8 for why it matters to public replicability.
+a real mounting option. See `ENGINEERING_LOG.md` CG-S10 for the full finding and
+`IRIS_INTEGRATION.md` §8 for why it matters to public replicability.
 
 ---
 

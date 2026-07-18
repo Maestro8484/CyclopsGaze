@@ -5,7 +5,7 @@ stand in for the discontinued Useful Sensors Person Sensor (SEN-21231) across
 **both** IRIS face-tracking consumers. IRIS itself is edited only during a later
 deploy session — these files live in CyclopsGaze (read-only reference to IRIS).
 
-Full step-by-step + decisions: [`../09_IRIS_INTEGRATION_PLAN.md`](../09_IRIS_INTEGRATION_PLAN.md).
+Full step-by-step + decisions: [`../docs/IRIS_INTEGRATION.md`](../docs/IRIS_INTEGRATION.md).
 
 ## The two consumers (different interfaces, one sensor family)
 
@@ -17,7 +17,7 @@ Full step-by-step + decisions: [`../09_IRIS_INTEGRATION_PLAN.md`](../09_IRIS_INT
 | Drop-in provided | `src/sensors/SEN0626Sensor.{h,cpp}` (already the class shim) | `integration/servo_teensy40_base_mount/person_sensor.{h,cpp}` (this kit) |
 
 Both are UART now: SEN0626 on `Serial1` (sensor TX→pin 0, sensor RX→pin 1), not
-I2C. Same wiring recipe as CyclopsGaze (`../05_WIRING.md`).
+I2C. Same wiring recipe as CyclopsGaze (`../docs/WIRING.md`).
 
 ## Eyes (T4.1)
 
@@ -27,11 +27,12 @@ I2C. Same wiring recipe as CyclopsGaze (`../05_WIRING.md`).
    call site is untouched). Neutralize the I2C bring-up / `psI2cBusRecover()` on
    this path. The existing `personSensor.isPresent()` probe loop works unchanged
    — `isPresent()` lazily runs `begin()` until the sensor answers.
-3. **Do NOT copy CyclopsGaze's CG-S6 targetX change or its `Y_CENTER`.** Those
-   are single-eye / bench-mount specific. IRIS keeps its own `targetX` negation
-   and its runtime `psYBias`. Bench-verify direction on IRIS independently;
-   trim `psYBias` for the sensor's mount height. See plan §4 / §5.
-4. Decide the confidence scale (plan §5) — this is the one real behavior choice.
+3. **Do NOT copy CyclopsGaze's gaze tuning verbatim** (its `GAZE_*_GAIN`/`GAZE_*_BIAS`
+   defaults). Those are single-eye / bench-mount specific. IRIS has two eyes and its own
+   mount geometry — bench-verify direction on IRIS and set its own per-axis gain/bias signs
+   and offsets. See [`../docs/IRIS_INTEGRATION.md`](../docs/IRIS_INTEGRATION.md).
+4. Decide the confidence scale — the one real behavior choice (both now emit the raw
+   0–100 score and gate at 60; see IRIS_INTEGRATION.md § divergence).
 
 ## Servo (T4.0)
 
@@ -45,6 +46,8 @@ I2C. Same wiring recipe as CyclopsGaze (`../05_WIRING.md`).
 
 ## Status
 
-CyclopsGaze tracking is **VERIFIED** (CG-S8). These adapters are code-reviewed
-against the live IRIS interfaces but are **REPO-ONLY** for IRIS until an IRIS
-deploy session flashes and bench-verifies them. See plan §6.
+The **eyes** drop-in has been **deployed to live IRIS and is tracking faces** (IRIS S212/b/c);
+the real swap uncovered the center-only-box presence-test bug and drove the per-axis gaze-shaping
+model — both documented in [`../docs/IRIS_INTEGRATION.md`](../docs/IRIS_INTEGRATION.md). The
+**servo** adapter here is code-reviewed against the live interface but flash-verify it on the
+servo Teensy before relying on it.

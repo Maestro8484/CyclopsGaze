@@ -1,1 +1,10 @@
+# PlatformIO build output
 .pio/
+
+# Editor / IDE
+.vscode/
+.idea/
+
+# OS noise
+.DS_Store
+Thumbs.db

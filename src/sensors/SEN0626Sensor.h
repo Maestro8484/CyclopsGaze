@@ -75,7 +75,7 @@ private:
   static constexpr long SAMPLE_TIME_MS = 150;
   static constexpr uint16_t NATIVE_W = 640;
   // Assumed VGA height. DFRobot documents only the X range (0-640); Y is
-  // unconfirmed. Verify on the bench via rawFaceY() (see NOTES.md bench step 6).
+  // unconfirmed. Verify on the bench via rawFaceY() (see docs/BENCH_PROTOCOL.md step 6).
   static constexpr uint16_t NATIVE_H = 480;
 
   // SEN0626 boots an on-board AI model into RAM before it answers Modbus. Give

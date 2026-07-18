@@ -144,7 +144,19 @@ bool SEN0626Sensor::read() {
   uint8_t cx = (uint8_t)((uint32_t)faceX * 255 / NATIVE_W);
   uint8_t cy = (uint8_t)((uint32_t)faceY * 255 / NATIVE_H);
 
-  face.box_confidence = (uint8_t)(score * 255 / 100);
+  // CG-S12 SYNC-FROM-IRIS (⚠ UNVERIFIED — re-bench is the #1 priority on the next
+  // flash with a spare SEN0626). Emit the RAW DFRobot score (0-100), NOT the old
+  // 0-255 remap (score*255/100). This matches the deliberate divergence proven in
+  // IRIS S212: IRIS gates on a 0-100 `psConfGate` knob, so a 0-255 emission made
+  // every real detection (raw 60-90 -> 153-229) clear any reachable gate and left
+  // the confidence knob inert. Emitting the raw score makes the gate mean exactly
+  // what DFRobot documents: a score >= 60 is a valid face (wiki.dfrobot.com/sen0626).
+  // `score` is already clamped to 0-100 above. PS_CONF_GATE / PS_SERVO_CONF_GATE
+  // were moved 152 -> 60 to match this scale. The old bench-VERIFIED CyclopsGaze
+  // behavior (0-255 emit + gate 152) was mathematically the same threshold
+  // (152/255 ≈ 0.60), so tracking should be unchanged — but this has NOT been
+  // re-observed on the bench since the change. See CHANGELOG CG-S12.
+  face.box_confidence = (uint8_t)score;
   // SEN0626 reports a face center, not a true bounding box. Store that center
   // in both edges so consumers recover the exact target even at frame edges
   // (box_left==box_right==cx -> IRIS's (left+(right-left)/2) collapses to cx

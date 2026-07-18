@@ -24,7 +24,7 @@
 //      off I2C).
 //   4. The old I2C Person Sensor LED register does not exist on SEN0626, so the
 //      LED calls become no-ops (kept as symbols so PSLED serial commands and the
-//      .ino still compile/link). See 09_IRIS_INTEGRATION_PLAN.md.
+//      .ino still compile/link). See docs/IRIS_INTEGRATION.md.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Kept for source compatibility with any code that referenced these. The
@@ -41,14 +41,15 @@
 // PSLED=0/1 serial command path still compiles; writing it is a no-op.
 #define PERSON_SENSOR_LED_ENABLED 0
 
-// Confidence gate on the SEN0626 0-255 box_confidence (= raw score*255/100).
-// 152 == raw score >= 60, DFRobot's own documented validity floor for this
-// sensor (wiki.dfrobot.com/sen0626/docs/23024), matching CyclopsGaze's verified
-// PS_CONF_GATE. NOTE: the original servo driver gated `boxConfidence < 60` on
-// the Useful Sensors 0-255 scale (~24%); this is stricter and vendor-derived.
-// See 09_IRIS_INTEGRATION_PLAN.md §confidence-scale before changing.
+// Confidence gate on the SEN0626 box_confidence. CG-S12: SEN0626Sensor now emits
+// the RAW DFRobot score (0-100), so this gate moved 152 -> 60 to stay on the same
+// scale. 60 IS DFRobot's own documented validity floor (wiki.dfrobot.com/sen0626/
+// docs/23024) -- the same effective threshold as the old 152/255, matching
+// CyclopsGaze's eyes PS_CONF_GATE. NOTE: the original servo driver gated
+// `boxConfidence < 60` on the Useful Sensors 0-255 scale (~24%); this is stricter
+// and vendor-derived. See docs/IRIS_INTEGRATION.md before changing.
 #ifndef PS_SERVO_CONF_GATE
-#define PS_SERVO_CONF_GATE 152
+#define PS_SERVO_CONF_GATE 60
 #endif
 
 // Live LED state + setter, kept for API parity. On SEN0626 the setter is a

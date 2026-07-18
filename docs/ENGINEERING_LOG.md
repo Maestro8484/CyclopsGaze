@@ -1,4 +1,14 @@
-# CyclopsGaze — Session Notes
+# CyclopsGaze — Engineering Log
+
+> This is the full chronological engineering record (design decisions, the CG-S3 firmware
+> audit, external research, bench findings, and status history). For focused reference, see the
+> dedicated docs: **[SEN0626_PROTOCOL.md](SEN0626_PROTOCOL.md)** (register/protocol),
+> **[BENCH_PROTOCOL.md](BENCH_PROTOCOL.md)** (first-flash procedure),
+> **[WIRING.md](WIRING.md)**, and **[IRIS_INTEGRATION.md](IRIS_INTEGRATION.md)**. Where this log
+> and a dedicated doc or the source disagree, the source and the newest CHANGELOG entry win —
+> parts of this log predate the CG-S12 sync (raw-score gate + per-axis gain/bias).
+
+## Session Notes
 
 ## Purpose & Deployment Framing (operator, 2026-07-04)
 
@@ -49,7 +59,7 @@ No is_facing field: always set is_facing=1 in shim.
   facing-gate logic. SEN0626 has no direct equivalent here; hardcoded true
   means "facing" is always asserted. Non-blocking for live IRIS because
   psFacingRequired defaults false since IRIS S153c. If ever re-enabled, derive
-  facing from SEN0626 head-pose/gesture registers first (see 09_IRIS_INTEGRATION_PLAN §5).
+  facing from SEN0626 head-pose/gesture registers first (see IRIS_INTEGRATION.md §5).
 
 Coordinate remap (matches SEN0626Sensor.cpp read()):
   NATIVE_W = 640
@@ -204,7 +214,7 @@ whether these are known/expected characteristics rather than bugs:
     at close range, where angular resolution per unit of physical head movement
     is coarsest, this could plausibly show up as X-specific centroid noise.
     This is reasoned inference, not something the datasheet or forum discusses
-    — flagged for the next session to test empirically (see 11_HANDOFF doc).
+    — flagged for the next session to test empirically (see archive/11_HANDOFF_FABLE_LATERAL_TRACKING.md).
 - **Confidence: DFRobot's own recommended validity floor is score >=60/100**
   (previous section, 3.7) — used to derive the CG-S5 `PS_CONF_GATE`.
 - **Known real-world failure modes** (DFRobot forum, "SEN0626 Gesture and Face
@@ -228,7 +238,7 @@ whether these are known/expected characteristics rather than bugs:
   close conversational distance. **If the operator's own IRIS interaction
   distance is regularly under ~20 inches, the SEN0626 is a real, sourced
   downgrade for that specific use case**, not just a tuning gap — this should
-  weigh on the 09_IRIS_INTEGRATION_PLAN gate decision, not just be tuned around.
+  weigh on the IRIS_INTEGRATION.md gate decision, not just be tuned around.
 
 ### 3.8 mapRadius / tracking range — VERDICT: correct, matches IRIS. Knob added.
 
@@ -268,7 +278,7 @@ absent) ≈ 2s floor + ~2s of sweeps.
 ## Flash & Verify — Bench Protocol (first flash)
 
 REPO-ONLY. Run this once a spare T4.1 + SEN0626 + display(s) are wired per
-05_WIRING.md. An operator new to PlatformIO can follow it top to bottom. Each
+WIRING.md. An operator new to PlatformIO can follow it top to bottom. Each
 step: action → expected serial → pass/fail. Serial monitor at **115200**.
 
 Firmware version in repo: **CG-S3** (bump before flashing if you change code).
@@ -359,7 +369,7 @@ Record the observed max here. Also sanity-check rawX maxes near 640.
 
 Action: at ~1 m frontal, read the `conf` field (and rawScore).
 Expected (CG-S5): a clear frontal face should comfortably clear conf > 152
-(raw score ≥60 — DFRobot's own documented validity floor, NOTES.md "External
+(raw score ≥60 — DFRobot's own documented validity floor, ENGINEERING_LOG.md "External
 research").
 - If a clear face reads conf ≤152 / it won't track: this means DFRobot's own
   recommended floor is too strict for this specific unit — lower `PS_CONF_GATE`
@@ -370,7 +380,7 @@ research").
 ### 7b. Distance floor + lateral (X-axis) tracking (CG-S5, bench-observed 2026-07-06)
 
 DFRobot's own documented detection range is **0.5–3 m (~19.7 in – ~9.8 ft)**
-for both gesture and face recognition (NOTES.md "External research"). Below
+for both gesture and face recognition (ENGINEERING_LOG.md "External research"). Below
 ~20 inches is **out-of-spec operation** — instability there is expected, not a
 firmware bug. Test at/above 20 inches, not below.
 
@@ -391,7 +401,7 @@ unstable lateral (X) tracking, worse the closer they stood.
   (floor violation) and/or the now-fixed power issue, not a firmware/mapping bug.
 - If `rawX` still jitters rapidly while you hold still at 24-36": that's a
   genuine sensor-side X-axis noise issue independent of distance and power —
-  see 11_HANDOFF_FABLE_LATERAL_TRACKING.md for the investigation plan (a
+  see archive/11_HANDOFF_FABLE_LATERAL_TRACKING.md for the investigation plan (a
   smoothing/low-pass filter on targetX, modeled on IRIS's own panServo
   `filteredPan` alpha=0.15 pattern, is the leading candidate fix if this turns
   out to be sensor noise rather than a mapping bug).
@@ -414,7 +424,7 @@ PASS: both. FAIL: freeze/crash → note timeout (audit 3.6) or wiring.
 
 ### 10. Dual-eye addendum (only if built with `#define DUAL_EYE`)
 
-Action: wire the second display (05_WIRING dual-eye table: CS9/DC8/RST6, shared
+Action: wire the second display (WIRING.md dual-eye table: CS9/DC8/RST6, shared
 SCK13/MOSI11), uncomment `#define DUAL_EYE`, reflash.
 Expect: BOTH displays show an eye at boot; both track the same face together;
 neither is blank or frozen. PASS: two coordinated eyes. FAIL: second display
@@ -428,11 +438,11 @@ Note: per-eye refresh is ~half single-eye (shared bus) — expected, not a fault
 Resolved this session (2026-07-06), T4.1 connected on COM6:
 - SEN0626 initially NOT FOUND — root cause was the sensor's onboard I2C/UART
   DIP switch left in I2C mode (this firmware is UART-only). Fixed by flipping
-  the switch; documented in 05_WIRING.md and bench step 3.
+  the switch; documented in WIRING.md and bench step 3.
 - SEN0626 VCC measured 2.6V vs 3.25V at the Teensy's own 3.3V pin — a bad
   connector in the VCC run (not the Teensy regulator, which tested healthy).
   Fixed by reseating/direct-wiring. Undervolting an active-inference sensor is
-  a documented SEN0626 forum failure mode (NOTES.md "External research") and
+  a documented SEN0626 forum failure mode (ENGINEERING_LOG.md "External research") and
   plausibly contributed to the narrow detection envelope reported below.
 - Confidence gate was tuned against IRIS's own unrelated constant (45), not
   the SEN0626's actual behavior — replaced with DFRobot's documented floor
@@ -461,7 +471,7 @@ Open (non-blocking for IRIS):
 
 Tracking is bench-verified end-to-end (COM6, operator live). CyclopsGaze is
 cleared as a drop-in Person Sensor (SEN-21231) replacement — unblocks
-09_IRIS_INTEGRATION_PLAN.
+IRIS_INTEGRATION.md.
 
 - [x] Steps 1-3: enumerate, flash, boot + SEN0626 baud — DONE.
 - [x] Step 4: face-detect serial line confirmed (gate=PASS, rawX/rawY logging).
@@ -477,7 +487,7 @@ Deploy-time (not blockers):
 ## IRIS integration (CG-S9, 2026-07-07)
 
 Code-reviewed both IRIS consumers of the dead Person Sensor and produced drop-ins.
-Details in 09_IRIS_INTEGRATION_PLAN.md + integration/README.md. Summary:
+Details in IRIS_INTEGRATION.md + integration/README.md. Summary:
 - T4.1 eyes: `src/sensors/SEN0626Sensor.{h,cpp}` is the class drop-in; method
   surface + struct verified against live IRIS. `isPresent()` now lazy-begins so
   IRIS's probe loop needs no `begin()` edit.
@@ -509,7 +519,7 @@ SEN0626 as a Person Sensor (SEN-21231) drop-in — the original is tiny, the Gra
 is not. If the camera + ribbon alone is sufficient, SEN0626 can be mounted in a footprint
 closer to the original sensor's, without carrying the rest of the board. This strengthens
 both of CyclopsGaze's reasons for existing (§ Purpose above): insurance if IRIS's live
-Person Sensor ever fails, and the public-launch replicability recipe (09_IRIS_INTEGRATION_PLAN.md §8).
+Person Sensor ever fails, and the public-launch replicability recipe (IRIS_INTEGRATION.md §8).
 
 **Open before calling this VERIFIED:** confirm the detached camera sensor still reports
 through the **same I2C/UART register set, same device address, same baud rate** once

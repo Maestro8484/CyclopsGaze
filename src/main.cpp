@@ -20,11 +20,11 @@ void setup() {
 void loop() {
   bool sampled = sensor.read();
 
-  // Gate on confidence (face.box_confidence > PS_CONF_GATE). CG-S5: PS_CONF_GATE
-  // is now DFRobot's own documented validity floor for this sensor (raw score
-  // >=60, wiki.dfrobot.com/sen0626/docs/23024) translated to our 0-255 scale --
-  // not an arbitrary/IRIS-borrowed number. Tune further only against real bench
-  // scores (audit 3.7, NOTES.md "External research").
+  // Gate on confidence (face.box_confidence > PS_CONF_GATE). CG-S12: box_confidence
+  // is now the RAW DFRobot score (0-100) and PS_CONF_GATE=60 is DFRobot's own
+  // documented validity floor (score >=60, wiki.dfrobot.com/sen0626/docs/23024)
+  // -- same effective threshold as the old 152/255, just the vendor's native
+  // scale. Tune further only against real bench scores (audit 3.7, docs).
   bool anyFace = sampled && sensor.numFacesFound() > 0;
   person_sensor_face_t f = anyFace ? sensor.faceDetails(0) : person_sensor_face_t{};
   bool haveFace = anyFace && f.box_confidence > PS_CONF_GATE;
@@ -45,22 +45,22 @@ void loop() {
 
   if (haveFace) {
     // box_left==box_right==cx and box_top==box_bottom==cy (center-only box), so
-    // these are the exact face center. CG-S6: the IRIS-matched targetX negation
-    // (audit 3.1) assumed the eye-0 "left eye of a pair" mirror convention --
-    // but EyeController::renderFrame() unconditionally flips eye.x whenever
-    // eyeIndex==0 (EyeController.h ~590), and CyclopsGaze's single eye is always
-    // eyeIndex 0 (only one eye in the array), so it was permanently getting that
-    // pair-mirror treatment despite having no second eye to mirror against.
-    // Bench-confirmed lateral tracking was mirrored; removing the negation here
-    // is the correct fix without touching the shared EyeController. GAZE_GAIN
-    // scales the tracking range for bench tuning; setTargetPosition clamps to
-    // the unit circle so overshoot past +/-1 is safe (audit 3.8).
+    // these are the exact face center. CG-S12 (synced from IRIS S212c, ⚠ UNVERIFIED
+    // since the change -- re-bench #1 priority): per-axis signed gain + bias,
+    // targetN = rawN * GAIN + BIAS with rawN = (cN/127.5)-1 the sensor-space
+    // target in [-1,+1]. The gain SIGN is direction, its MAGNITUDE is range, so
+    // one knob covers both "mirrored" and "barely moves". This replaced the older
+    // single GAZE_GAIN + Y_CENTER scheme; the config.h defaults are algebraically
+    // identical to the bench-VERIFIED CG-S6 (no X negation -- our single eye is
+    // eyeIndex 0, already X-flipped by EyeController), CG-S7 (1.7 range) and CG-S8
+    // (Y_BIAS carries the below-eye-mount compensation Y_CENTER=33 used to apply).
+    // setTargetPosition clamps to the unit circle, so |gain|>1 is safe (audit 3.8).
     float cx = f.box_left;
     float cy = f.box_top;
-    float targetX = ((cx / 127.5f) - 1.0f) * GAZE_GAIN;
-    // CG-S8: Y_CENTER (not 127.5) is the zero-point -- see config.h, the sensor
-    // is mounted below the eye so true eye-level images near the frame's top.
-    float targetY = ((cy - Y_CENTER) / 127.5f) * GAZE_GAIN;
+    float rawX = (cx / 127.5f) - 1.0f;
+    float rawY = (cy / 127.5f) - 1.0f;
+    float targetX = rawX * GAZE_X_GAIN + GAZE_X_BIAS;
+    float targetY = rawY * GAZE_Y_GAIN + GAZE_Y_BIAS;
 
     eyes->setAutoMove(false);
     eyes->setTargetPosition(targetX, targetY);
