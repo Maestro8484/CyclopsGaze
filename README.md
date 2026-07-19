@@ -200,6 +200,26 @@ CyclopsGaze/
 
 ---
 
+## Authorship & originality
+
+CyclopsGaze is a **derivative work** built on Chris Miller's MIT-licensed TeensyEyes, with an
+original sensor + gaze layer on top. To be precise about who authored what:
+
+**Original to this project** (© the CyclopsGaze author):
+- `src/sensors/SEN0626Sensor.{h,cpp}` — the SEN0626 Modbus/UART driver: a clean reimplementation
+  that **replaces** TeensyEyes' I²C Person Sensor entirely, matching the Person Sensor struct so
+  consumers are unchanged.
+- The `integration/` drop-in adapters, and the gaze/tracking logic in `src/main.cpp` + `src/config.h`.
+- The **`nordicBlue` eye** — generated from the author's **own iris/sclera artwork** via TeensyEyes'
+  image-conversion tooling.
+
+**From TeensyEyes** (MIT © 2022 Chris Miller), bundled here:
+- The eye-rendering engine (`EyeController`), the GC9A01A display driver, and the polar/
+  displacement maps (`disp_*`, `polarAngle_*`) — several files verbatim, `EyeController` modified.
+- The eyelid geometry and the image-conversion tooling used to generate the eye above.
+
+File-level breakdown: **[docs/ATTRIBUTION.md](docs/ATTRIBUTION.md)**.
+
 ## Credits
 
 - **TeensyEyes — the eye-rendering engine**, MIT © 2022 **Chris Miller**. CyclopsGaze bundles
