@@ -75,6 +75,25 @@ Full pin tables, wire colors, power notes, and the dual-eye layout: **[docs/WIRI
 
 ---
 
+## Mounting & enclosures
+
+Physical mount designs (3D-printable and laser-cuttable) live in **[`hardware/`](hardware/)**:
+
+- **[`hardware/stl/`](hardware/stl/)** — 3D-printable parts (mounts, brackets, enclosures).
+- **[`hardware/lasercut/`](hardware/lasercut/)** — laser-cuttable 2D panels (SVG/DXF).
+
+> ⚠ **Scaffold only — no verified design exists yet.** Both folders are currently empty aside from
+> their own README placeholders. No physical dimensions for the GC9A01A display, the SEN0626
+> Gravity board, or their mounting-hole positions have been measured and recorded in this repo.
+> There's also an open design fork to resolve first: the SEN0626's camera is physically separable
+> from the rest of the Gravity board (bench finding, [docs/ENGINEERING_LOG.md](docs/ENGINEERING_LOG.md)
+> "CG-S10"), which could allow a much smaller mount — but that finding is itself unverified
+> (register behavior post-separation hasn't been confirmed). See
+> [`hardware/README.md`](hardware/README.md) for what a first design needs to nail down, and the
+> same REPO-ONLY → DEPLOYED → VERIFIED discipline the firmware uses.
+
+---
+
 ## How it works
 
 ```
@@ -111,10 +130,10 @@ pio device monitor -b 115200        # serial monitor
 Expected serial on boot:
 
 ```
-[CG] CyclopsGaze CG-S12
+[CG] CyclopsGaze CG-S13
 [CG] SEN0626 found at 9600 (attempt 1)
 [CG] faces=1 rawScore=72 conf=72 gate=PASS | rawX=311 rawY=40
-[CG]   -> tracking x=0.12 y=-0.05
+[CG]   -> raw=0.07,-0.03  target=0.12,-0.05  (gain 1.70/1.70 bias 0.00/1.26)
 ```
 
 First-flash walk-through (enumerate → flash → detect → verify each tracking direction), written
@@ -128,18 +147,30 @@ SPI1, so IRIS's two-bus layout can't be reused). Pin table in [docs/WIRING.md](d
 
 ---
 
-## Tunables (`src/config.h`)
+## Tunables — live over serial, no reflash (`PS_CFG:`)
 
-| Constant | Default | What it does |
+Since CG-S13, tracking behavior is tuned **live** over the same USB serial link you're already
+watching — ported from the parent IRIS project's own runtime-tuning protocol. Type a command,
+watch the eye change on the next sample:
+
+| Command | What it does | Default |
 |---|---|---|
-| `PS_CONF_GATE` | `60` | Min DFRobot face score (0–100) to track. 60 = DFRobot's documented validity floor. |
-| `GAZE_X_GAIN` / `GAZE_Y_GAIN` | `1.7` / `1.7` | Per-axis gaze range. **Sign = direction** (flip to un-mirror), **magnitude = range**. |
-| `GAZE_X_BIAS` / `GAZE_Y_BIAS` | `0.0` / `1.26` | Per-axis center offset. `Y_BIAS` compensates for the camera mounting below the eye. |
-| `FACE_LOST_MS` | `3000` | Time with no face before idle wander resumes. |
-| `CG_CALIB_RAW` | `1` | Log raw sensor registers for bench calibration; set `0` for quiet serial. |
+| `PS_CFG:CONF=n` | Min DFRobot face score (0–100) to track. `60` = DFRobot's documented validity floor. | `60` |
+| `PS_CFG:X_GAIN=f` / `PS_CFG:Y_GAIN=f` | Per-axis gaze range. **Sign = direction** (negate to un-mirror), **magnitude = range**. | `1.7` / `1.7` |
+| `PS_CFG:X_BIAS=f` / `PS_CFG:Y_BIAS=f` | Per-axis center offset. `Y_BIAS` compensates for the camera mounting below the eye. | `0.0` / `1.26` |
+| `PS_CFG:LOST_MS=n` | Time with no face before idle wander resumes. | `3000` |
+| `PS_CFG:FACING=0/1` | Require the `is_facing` bit — currently inert, SEN0626 has no facing register. | `0` |
+| `PS_CFG?` | Print all live values on one line. | — |
 
-The `targetN = rawN * gain + bias` shaping model and the confidence-scale choice are ported
-from the parent project's proven tuning — see [docs/IRIS_INTEGRATION.md](docs/IRIS_INTEGRATION.md).
+Values are **RAM-only** and reset with the board — once a value proves out on the bench, write it
+back into the matching `*_DEFAULT` constant in `src/config.h` so it survives a power cycle. Full
+reference: [docs/BENCH_PROTOCOL.md](docs/BENCH_PROTOCOL.md) § Live tuning.
+
+The `targetN = rawN * gain + bias` shaping model, the confidence-scale choice, and the `PS_CFG:`
+protocol itself are all ported from the parent project's proven tuning — see
+[docs/IRIS_INTEGRATION.md](docs/IRIS_INTEGRATION.md). One other `config.h` knob worth knowing:
+`SEN0626_SERIAL` selects which hardware UART the sensor is wired to (default `Serial1`) — IRIS's
+own install uses a different port because its pin 0 is already spoken for by an eye's chip-select.
 
 ---
 
@@ -151,12 +182,13 @@ on a Teensy 4.1 + SEN0626 + GC9A01A).
 **Integrated into IRIS: yes, and tracking live** — the SEN0626 driver was swapped in for the
 dead Person Sensor on IRIS's eyes and is confirmed detecting/tracking faces in the real robot.
 
-> ⚠ **One caveat, and it's the top re-bench priority.** The most recent code change (CG-S12)
-> synced this repo's driver + gaze math to the refined version proven in IRIS: the confidence
-> gate now uses DFRobot's native 0–100 score scale (gate `60` instead of `152/255`), and gaze
-> uses per-axis signed gain + bias. These are algebraically the same as the previously
-> bench-VERIFIED behavior and the firmware **compiles clean**, but they have **not been
-> re-observed on the standalone bench since the change**. Re-flash + re-run
+> ⚠ **One caveat, and it's the top re-bench priority.** Two rounds of code change since the last
+> bench pass have **not been re-observed on hardware**: CG-S12 synced this repo's driver + gaze
+> math to the version proven in IRIS (confidence gate on DFRobot's native 0–100 score scale, gate
+> `60` instead of `152/255`; gaze on per-axis signed gain + bias), and CG-S13 added the live
+> `PS_CFG:` tuning protocol + a facing gate on top of that. Both are algebraically/structurally
+> equivalent to the previously bench-VERIFIED behavior and the firmware **compiles clean**, but
+> neither has been reflashed and watched since. Re-flash + re-run
 > [docs/BENCH_PROTOCOL.md](docs/BENCH_PROTOCOL.md) before treating standalone tracking as
 > re-VERIFIED. Full history in [CHANGELOG.md](CHANGELOG.md).
 
@@ -189,10 +221,13 @@ Details of the integration, the deliberate driver divergence, and the bugs the s
 CyclopsGaze/
 ├── src/                    firmware (driver, gaze loop, bundled TeensyEyes engine)
 ├── integration/            ready-to-copy drop-in adapters for IRIS's two consumers
+├── hardware/                mounts & enclosures (STL + laser-cut) — see below
+│   ├── stl/                3D-printable parts
+│   └── lasercut/           laser-cuttable panels (SVG/DXF)
 ├── docs/                   wiring, protocol, bench procedure, IRIS integration, eng. log
 │   ├── archive/            raw session-by-session development handoffs (historical)
 │   └── media/              photos & video
-├── CHANGELOG.md            full development history (CG-S1 … CG-S12)
+├── CHANGELOG.md            full development history (CG-S1 … CG-S13)
 ├── CLAUDE.md               working context for Claude Code sessions
 ├── RULES.md                engineering discipline for this repo
 └── platformio.ini
