@@ -6,8 +6,13 @@ PlatformIO can follow it. Each step: **action → expected serial → pass/fail.
 
 > ⚠ **Re-running this is the #1 priority on the next flash.** The CG-S12 code sync (raw-score
 > gate + per-axis gain/bias) compiles clean but has **not been re-observed on the bench** since
-> the change. Steps 5–7 below are the ones that re-confirm it. Firmware in repo: **CG-S12** (bump
+> the change. Steps 5–7 below are the ones that re-confirm it. Firmware in repo: **CG-S13** (bump
 > `FIRMWARE_VERSION` in `src/config.h` before flashing if you change code).
+
+> **CG-S13: tune live, don't reflash.** Every gate/gain/bias/timeout below is now settable over
+> the same USB serial link you're watching, via the `PS_CFG:` protocol ported from IRIS — see
+> [§ Live tuning](#live-tuning-ps_cfg) before you start. Type a value, watch the eye change. Only
+> write the keeper back into `config.h` at the end.
 
 ## 0. Hardware first-checks (before anything else)
 
@@ -31,8 +36,33 @@ pio device list
 pio run -e cyclopsgaze -t upload
 pio device monitor -b 115200
 ```
-**Expect:** `[CG] CyclopsGaze CG-S12`
-**PASS:** version line matches `config.h` `FIRMWARE_VERSION`.
+**Expect:** `[CG] CyclopsGaze CG-S13`
+**PASS:** version line matches `config.h` `FIRMWARE_VERSION`. (You can also ask any time by
+typing `VERSION` into the monitor.)
+
+## Live tuning (`PS_CFG:`)
+
+Type these into the serial monitor (line-terminated) — they take effect immediately, no reflash.
+Ported verbatim from IRIS (S141 + S212c), so the same commands drive an IRIS board.
+
+| Command | Effect | Default |
+|---|---|---|
+| `PS_CFG:CONF=n` | confidence gate, raw DFRobot score 0–100 | `60` |
+| `PS_CFG:X_GAIN=f` | X gain — **sign = direction**, magnitude = range | `1.7` |
+| `PS_CFG:Y_GAIN=f` | Y gain — sign = up/down direction, magnitude = range | `1.7` |
+| `PS_CFG:X_BIAS=f` | X centering offset | `0.0` |
+| `PS_CFG:Y_BIAS=f` | Y centering offset (compensates sensor mounted below the eye) | `1.26` |
+| `PS_CFG:LOST_MS=n` | ms with no face before idle wander resumes | `3000` |
+| `PS_CFG:FACING=0/1` | require the `is_facing` bit (inert — SEN0626 has no facing register) | `0` |
+| `PS_CFG:LED=0/1` | accepted for API parity; **no-op** (no LED register exists) | `0` |
+| `PS_CFG?` | print all live values on one line | — |
+
+Each accepted key echoes `[DBG] PS_CFG KEY=value`. An unimplemented key answers
+`[DBG] PS_CFG UNKNOWN key …` — if you see that, you typo'd, and **nothing changed**.
+
+⚠ **Values are RAM-only and reset with the board.** There is no `ps_config.json` here the way
+IRIS has on its Pi4. When a value proves out, write it into `src/config.h` (the `*_DEFAULT`
+constants) and reflash, or it is lost on the next power cycle.
 
 ## 3. SEN0626 detect (baud + PID)
 
@@ -46,10 +76,12 @@ first** (step 0), then TX→pin0 / RX→pin1 cross, 3.3 V, GND.
 Sit ~1 m in front of the sensor, facing it. With `CG_CALIB_RAW` on (default), expect:
 ```
 [CG] faces=1 rawScore=NN conf=NN gate=PASS | rawX=NNN rawY=NNN
-[CG]   -> tracking x=+0.NN y=+0.NN
+[CG]   -> raw=+0.NN,+0.NN  target=+0.NN,+0.NN  (gain 1.70/1.70 bias 0.00/1.26)
 ```
-`rawScore`/`conf` = DFRobot score 0–100 (CG-S12); `x`,`y` = gaze target in [−1,+1] after
-gain/bias; `rawX/rawY` = sensor center 0–640 / 0–480(?).
+`rawScore`/`conf` = DFRobot score 0–100 (CG-S12); `raw` = sensor-space target in [−1,+1] **before**
+shaping; `target` = what the eye was actually driven with; the trailing gain/bias are the **live**
+values, so a `PS_CFG:` change is visible in the very next line. `rawX/rawY` = sensor center 0–640 /
+0–480(?).
 **PASS:** `faces=1` with plausible values when a face is present; logging stops when you leave.
 
 ## 5. Direction verification (re-confirm after CG-S12)
@@ -64,11 +96,15 @@ Move slowly and check the eye **and** the serial signs:
 | Face toward **BOTTOM** of frame | eye looks **DOWN** |
 | Face **centered** | eye straight ahead (x≈0, y≈0) |
 
-**PASS:** eye follows you in all four directions.
-- **If LEFT/RIGHT is mirrored:** flip the **sign** of `GAZE_X_GAIN` in `config.h` (+1.7 ↔ −1.7).
-- **If UP/DOWN is inverted:** flip the sign of `GAZE_Y_GAIN`.
-- **If the eye is biased off-center at neutral:** adjust `GAZE_X_BIAS` / `GAZE_Y_BIAS`
+**PASS:** eye follows you in all four directions. Fix any failure **live** — no reflash:
+- **If LEFT/RIGHT is mirrored:** flip the **sign** — `PS_CFG:X_GAIN=-1.7`.
+- **If UP/DOWN is inverted:** `PS_CFG:Y_GAIN=-1.7`.
+- **If travel is too small:** raise the magnitude — `PS_CFG:X_GAIN=2.5`. (Not a bug on its own: at
+  20 in from an 85° FOV a ±6 in head move only crosses ~40% of frame.)
+- **If the eye is biased off-center at neutral:** `PS_CFG:Y_BIAS=…` / `PS_CFG:X_BIAS=…`
   (`Y_BIAS` compensates for the camera mounting below the eye).
+
+Write whatever proves out back into `src/config.h` (`GAZE_*_DEFAULT`) before you power down.
 
 ## 6. `NATIVE_H` calibration (480 vs 640)
 
@@ -79,13 +115,19 @@ Also sanity-check `rawX` maxes near 640. (Only matters if Y precision matters.)
 ## 7. Confidence calibration
 
 At ~1 m frontal, read `conf`/`rawScore`. A clear frontal face should comfortably clear
-`conf > 60` (`PS_CONF_GATE`, DFRobot's validity floor). If a clear face won't track, lower
-`PS_CONF_GATE` incrementally; if empty-frame noise produces `faces=1`, raise it.
+`conf > 60` (the gate default, DFRobot's own validity floor). If a clear face won't track, lower it
+live (`PS_CFG:CONF=55`, …); if empty-frame noise produces `gate=PASS`, raise it. Record the value
+that stabilises tracking and put it in `PS_CONF_GATE_DEFAULT`.
+
+> For reference, live IRIS runs `CONF=25` — **do not copy that**. It is a leftover from the Person
+> Sensor's 0–255 scale (~10%) that predates the SEN0626 swap, not a tuned value. See
+> [ENGINEERING_LOG.md](ENGINEERING_LOG.md) CG-S13.
 
 ## 8. AutoMove resume (lost timeout)
 
-With the eye tracking you, leave the frame. **Expect:** ~3 s (`FACE_LOST_MS`) after your last
-detection the eye stops holding and begins idle wander; return → it re-locks.
+With the eye tracking you, leave the frame. **Expect:** ~3 s (the `LOST_MS` default) after your last
+detection the eye stops holding and begins idle wander; return → it re-locks. Shorten it while
+bench-testing with `PS_CFG:LOST_MS=1500` so you're not waiting on every pass.
 **FAIL:** eye freezes forever → regression in the loop's no-face `else if`.
 
 ## 9. Edge tracking / flaky comms

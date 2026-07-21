@@ -530,3 +530,87 @@ before finalizing the swap — same protocol as the existing `CG_CALIB_RAW` benc
 (§ SEN0626 Protocol above).
 
 **Status: REPO-ONLY bench finding — not yet flashed or integrated into firmware.**
+
+## CG-S13 (2026-07-21) — sync pass #2 from live IRIS: transport knob + PS_CFG live tuning
+
+Session purpose was "bring IRIS's polished firmware back". The first job was establishing what had
+actually drifted. Everything below was read from the live IRIS repo and the running Pi4 that day,
+not recalled.
+
+### What was NOT drifted (measured, so it isn't re-litigated next session)
+
+- `diff` of `SEN0626Sensor.{h,cpp}` IRIS-vs-CyclopsGaze: **comment text only, zero code
+  difference.** The driver had not drifted at all.
+- **IRIS's gaze code is frozen at S212c.** Its last touch of `src/main.cpp`/`src/config.h` is S213
+  (2026-07-18), which changed only `PROTOCOL_VERSION`. CG-S12 had already synced the S212c model.
+  So there was **no un-synced IRIS code change** to bring back — the premise needed correcting
+  before any edit was made.
+
+### What HAD drifted (the actual transfer)
+
+1. **The UART is not the same port.** Live IRIS runs the sensor on **`Serial4` (RX 16 / TX 17)**,
+   not `Serial1` — pin 0 is IRIS's left-eye CS (IRIS `src/config.h` §"Gaze sensor transport
+   (S212)"; Serial2/Serial8 also ruled out there against the mouth display's DC/MOSI). Two
+   CyclopsGaze docs (`IRIS_INTEGRATION.md`, `integration/README.md`) asserted IRIS used `Serial1`
+   — **both were wrong and are corrected**. The port is now a config knob, `SEN0626_SERIAL`
+   (adopting IRIS's own mechanism), default `Serial1` for this bench rig.
+2. **`PS_CFG:` runtime tuning ported** (IRIS S141 + S212c) — the real polish. Gate, per-axis
+   gain/bias, lost-timeout, facing and LED are now runtime `ps*` variables retunable over the USB
+   serial link with no reflash. Parser, key set, `[DBG] PS_CFG KEY=value` ack wording and the
+   **S212c false-ack guard** are IRIS's verbatim, and the runtime variable names match IRIS's
+   exactly, so the two `main.cpp` files stay diffable. This directly attacks the standing #1
+   priority: the CG-S12 re-bench no longer costs an edit-reflash cycle per tuning step.
+   - One CyclopsGaze-only addition: `PS_CFG?`, a one-line readback. Justified — IRIS reads live
+     values back from the Pi4's `ps_config.json` via the WebUI; a standalone board has no store, so
+     without it there is no way to read state mid-bench. Deliberately not in the ack shape.
+   - Values are **RAM-only here** and revert on reset (no `ps_config.json` equivalent).
+3. **Facing gate added for parity** (`psFacingRequired`, default false). Inert on SEN0626 — the
+   shim hardcodes `is_facing=1` — but it closes a surface gap against IRIS.
+4. **Gaze math now IRIS's verbatim expression** (`box_left + (box_right-box_left)/2`, and the
+   `/3` "aim a third down the box" term for Y) instead of reading `box_left`/`box_top` directly.
+   **Zero behavior change** — the shim's box is center-only so both delta terms are 0 and it
+   collapses to the exact center. Established by algebra, not bench. Done for diffability and so a
+   real bounding-box sensor would work unmodified.
+
+### IRIS-vs-CyclopsGaze value diff (OPEN — owed a behavioral comparison)
+
+Observed on the running system 2026-07-21 (Teensy acks on the wire at 09:29, firmware S213):
+`CONF=25 FACING=0 LOST_MS=8500 Y_BIAS=0.0 X_GAIN=1.0 Y_GAIN=1.0 X_BIAS=0.0`. IRIS **is** tracking
+with these (79 `FACE:1` acquisitions that day, latest 13:54).
+
+| Knob | CyclopsGaze | Live IRIS |
+|---|---|---|
+| `X_GAIN` / `Y_GAIN` | 1.7 / 1.7 | 1.0 / 1.0 |
+| `X_BIAS` / `Y_BIAS` | 0.0 / 1.26 | 0.0 / 0.0 |
+| `CONF` | 60 | 25 |
+| `LOST_MS` | 3000 | 8500 |
+
+**The IRIS values are not tuned values.** `/home/pi/ps_config.json` is dated **2026-07-15 —
+before** the S212 swap (07-16) — and contains **no** `X_GAIN`/`Y_GAIN`/`X_BIAS` keys, so all three
+fall back to firmware compile-time defaults. `CONF=25` is a Person-Sensor-era number on the old
+0–255 scale (~10%) now applied to the SEN0626's raw 0–100 score, far below DFRobot's documented 60
+floor; IRIS's own S212 source comment flags raising it as an unmade operator decision, and it is
+still 25. CyclopsGaze's numbers, by contrast, are measured (CG-S7 gain from `rawX` span 151–427;
+CG-S8 `Y_BIAS` from measured eye-level `cy≈33`).
+
+**Operator decision (this session): keep CyclopsGaze's measured defaults.** Adopting IRIS's would
+trade measured data for unmeasured, and gain/bias are mount-geometry-specific anyway.
+
+**OPEN / owed:** run both value sets head-to-head on one rig and record which actually gazes
+better. Neither is established as better today; only CyclopsGaze's has bench data behind it. Both
+sets are now `PS_CFG:` one-liners, so this is a cheap test — do it during the CG-S12 re-bench.
+
+### Status
+
+**REPO-ONLY.** Both builds clean on Teensy 4.1 — single-eye (FLASH code 82876, RAM1 free 413824)
+and `-DDUAL_EYE` (code 83068). **Nothing was flashed and nothing was observed running:** `pio
+device list` showed only COM1 (legacy) and COM4/COM5 (Bluetooth) — no Teensy enumerated on
+SuperMaster this session. The PS_CFG parser, the facing gate and the IRIS-form gaze math are
+**UNVERIFIED on hardware**, on top of CG-S12's still-unverified raw-score gate and gain/bias.
+
+Checks that would confirm, in order, on the next flash with a spare SEN0626 + T4.1:
+1. Boot line reads `[CG] CyclopsGaze CG-S13`.
+2. `PS_CFG?` returns the config.h defaults; `PS_CFG:X_GAIN=2.5` acks and visibly widens travel;
+   a typo'd key answers `UNKNOWN key` and changes nothing.
+3. Full docs/BENCH_PROTOCOL.md re-run (steps 5–7 re-confirm CG-S12).
+4. The IRIS-vs-CyclopsGaze value comparison above.

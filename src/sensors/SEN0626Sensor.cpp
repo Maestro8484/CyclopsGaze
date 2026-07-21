@@ -151,8 +151,9 @@ bool SEN0626Sensor::read() {
   // every real detection (raw 60-90 -> 153-229) clear any reachable gate and left
   // the confidence knob inert. Emitting the raw score makes the gate mean exactly
   // what DFRobot documents: a score >= 60 is a valid face (wiki.dfrobot.com/sen0626).
-  // `score` is already clamped to 0-100 above. PS_CONF_GATE / PS_SERVO_CONF_GATE
-  // were moved 152 -> 60 to match this scale. The old bench-VERIFIED CyclopsGaze
+  // `score` is already clamped to 0-100 above. The consumer gates (config.h
+  // PS_CONF_GATE_DEFAULT, and the servo adapter's PS_SERVO_CONF_GATE) were moved
+  // 152 -> 60 to match this scale. The old bench-VERIFIED CyclopsGaze
   // behavior (0-255 emit + gate 152) was mathematically the same threshold
   // (152/255 ≈ 0.60), so tracking should be unchanged — but this has NOT been
   // re-observed on the bench since the change. See CHANGELOG CG-S12.

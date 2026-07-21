@@ -34,6 +34,11 @@ struct and method surface IRIS already consumes. See [README.md](README.md) for 
 - After flashing, confirm the version string appears in the serial monitor before claiming DEPLOYED.
 - The SEN0626 has a physical **I²C/UART DIP switch — it must be on UART**; this firmware is
   UART/Modbus only. Confirm the sensor's own VCC reads ~3.2–3.3 V under load. (See docs/WIRING.md.)
+- Which UART is a config knob: `SEN0626_SERIAL` in `src/config.h` (default `Serial1` = RX 0 / TX 1).
+  Live IRIS uses `Serial4` (RX 16 / TX 17) — pin 0 is its left-eye CS. Don't assume they match.
+- Since CG-S13 the gate/gain/bias/timeout tunables are **runtime** values settable over serial with
+  `PS_CFG:` (no reflash) — see docs/BENCH_PROTOCOL.md § Live tuning. `config.h` holds the `*_DEFAULT`
+  seeds; RAM-only, so a proven value must be written back to `config.h` or it dies with the power.
 
 ## Build & flash commands
 
@@ -54,16 +59,22 @@ IRIS-verbatim EyeController — informational, not a warning.
 - `integration/` — ready-to-copy drop-in adapters for IRIS's two sensor consumers.
 - `docs/` — WIRING, SEN0626_PROTOCOL, BENCH_PROTOCOL, IRIS_INTEGRATION, ENGINEERING_LOG,
   ATTRIBUTION; `docs/archive/` holds raw historical session handoffs; `docs/media/` holds photos.
-- `CHANGELOG.md` — full history CG-S1 … CG-S12. `RULES.md` — engineering rules.
+- `CHANGELOG.md` — full history CG-S1 … CG-S13. `RULES.md` — engineering rules.
 
 ## Current state (read CHANGELOG.md + docs/ENGINEERING_LOG.md for detail)
 
 - Standalone tracking was **bench-VERIFIED** at CG-S8 (direction, range, Y-center).
-- The driver was **integrated into IRIS (S212) and is tracking live**; refinements found during
-  that swap were synced back here at **CG-S12**.
-- ⚠ **CG-S12 is UNVERIFIED on the standalone bench** (raw-score gate + per-axis gain/bias). It
-  compiles clean but has not been re-observed. **Re-running docs/BENCH_PROTOCOL.md is the #1
-  priority** on the next flash with a spare SEN0626.
+- The driver was **integrated into IRIS (S212) and is tracking live** (IRIS firmware S213 as of
+  2026-07-21). Refinements were synced back here at **CG-S12** and again at **CG-S13**.
+- **The two repos are in sync as of CG-S13** — verified by diff, not memory: `SEN0626Sensor.{h,cpp}`
+  are byte-identical (comments aside), and IRIS's gaze code is frozen at S212c. If a future session
+  is told "sync from IRIS", **diff first** — the answer may again be "already synced".
+- ⚠ **UNVERIFIED on the standalone bench:** CG-S12's raw-score gate + per-axis gain/bias, *and*
+  CG-S13's PS_CFG parser + facing gate. All compile clean; none re-observed. **Re-running
+  docs/BENCH_PROTOCOL.md is the #1 priority** on the next flash with a spare SEN0626 + T4.1.
+- ⚠ **Owed:** a head-to-head behavioral comparison of CyclopsGaze's tuning values vs live IRIS's
+  (docs/IRIS_INTEGRATION.md § "The tuning-value gap"). IRIS's are untuned fallbacks, not proven
+  numbers — do not adopt them on the assumption that "live = better".
 
 ## Session close checklist
 
