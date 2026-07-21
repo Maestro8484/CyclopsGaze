@@ -1,11 +1,11 @@
-# STL — 3D-printable mounts
+# STL: 3D-printable mounts
 
 3D-printable parts (Teensy tray, eye bezel, sensor mount, enclosure, etc.) go here as `.stl`
 (print-ready mesh) and, ideally, the editable source (`.f3d`, `.step`, `.scad`, or similar) beside
 it so the design can be revised, not just reprinted.
 
 **Empty today.** See [`../README.md`](../README.md) for what's needed before a design can start
-(measured dimensions — none are recorded in this repo yet — and the full-board-vs-detached-camera
+(measured dimensions, none are recorded in this repo yet, and the full-board-vs-detached-camera
 decision for the SEN0626 mount).
 
 ## Naming convention (once files exist)

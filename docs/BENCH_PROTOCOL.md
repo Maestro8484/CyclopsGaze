@@ -10,13 +10,13 @@ Steps 5–7 below re-confirm it. Firmware in repo: **CG-S13** (bump `FIRMWARE_VE
 `src/config.h` before flashing if you change code).
 
 CG-S13 note: tune live, don't reflash. Every gate/gain/bias/timeout below is now settable
-over the same USB serial link you're watching, via the `PS_CFG:` protocol ported from IRIS —
-see [§ Live tuning](#live-tuning-ps_cfg) before you start. Type a value, watch the eye change.
+over the same USB serial link you're watching, via the `PS_CFG:` protocol ported from IRIS.
+See [§ Live tuning](#live-tuning-ps_cfg) before you start. Type a value, watch the eye change.
 Only write the keeper back into `config.h` at the end.
 
 ## 0. Hardware first-checks (before anything else)
 
-- SEN0626 DIP switch on UART (not I²C). This firmware has no I²C path — wrong mode reads as
+- SEN0626 DIP switch on UART (not I²C). This firmware has no I²C path. Wrong mode reads as
   `NOT FOUND` with otherwise-correct wiring. This is the single most likely cause of a
   first-flash failure. Check it before re-wiring.
 - Sensor's own VCC pin ≈ 3.2–3.3V under load (measure at the sensor, not the Teensy pin).
@@ -42,26 +42,26 @@ typing `VERSION` into the monitor.)
 
 ## Live tuning (`PS_CFG:`)
 
-Type these into the serial monitor (line-terminated) — they take effect immediately, no
+Type these into the serial monitor (line-terminated). They take effect immediately, no
 reflash. Ported verbatim from IRIS (S141 + S212c), so the same commands drive an IRIS board.
 
 | Command | Effect | Default |
 |---|---|---|
 | `PS_CFG:CONF=n` | confidence gate, raw DFRobot score 0–100 | `60` |
-| `PS_CFG:X_GAIN=f` | X gain — sign = direction, magnitude = range | `1.7` |
-| `PS_CFG:Y_GAIN=f` | Y gain — sign = up/down direction, magnitude = range | `1.7` |
+| `PS_CFG:X_GAIN=f` | X gain: sign = direction, magnitude = range | `1.7` |
+| `PS_CFG:Y_GAIN=f` | Y gain: sign = up/down direction, magnitude = range | `1.7` |
 | `PS_CFG:X_BIAS=f` | X centering offset | `0.0` |
 | `PS_CFG:Y_BIAS=f` | Y centering offset (compensates sensor mounted below the eye) | `1.26` |
 | `PS_CFG:LOST_MS=n` | ms with no face before idle wander resumes | `3000` |
-| `PS_CFG:FACING=0/1` | require the `is_facing` bit (inert — SEN0626 has no facing register) | `0` |
+| `PS_CFG:FACING=0/1` | require the `is_facing` bit (inert, SEN0626 has no facing register) | `0` |
 | `PS_CFG:LED=0/1` | accepted for API parity; no-op (no LED register exists) | `0` |
-| `PS_CFG?` | print all live values on one line | — |
+| `PS_CFG?` | print all live values on one line | n/a |
 
 Each accepted key echoes `[DBG] PS_CFG KEY=value`. An unimplemented key answers
-`[DBG] PS_CFG UNKNOWN key …` — if you see that, you typo'd, and nothing changed.
+`[DBG] PS_CFG UNKNOWN key …`. If you see that, you typo'd, and nothing changed.
 
 Values are RAM-only and reset with the board. There's no `ps_config.json` here the way IRIS
-has on its Pi4 — when a value proves out, write it into `src/config.h` (the `*_DEFAULT`
+has on its Pi4. When a value proves out, write it into `src/config.h` (the `*_DEFAULT`
 constants) and reflash, or it's lost on the next power cycle.
 
 ## 3. SEN0626 detect (baud + PID)
@@ -96,10 +96,10 @@ Move slowly and check the eye and the serial signs:
 | Face toward BOTTOM of frame | eye looks DOWN |
 | Face centered | eye straight ahead (x≈0, y≈0) |
 
-**PASS:** eye follows you in all four directions. Fix any failure live — no reflash:
-- LEFT/RIGHT mirrored: flip the sign — `PS_CFG:X_GAIN=-1.7`.
+**PASS:** eye follows you in all four directions. Fix any failure live, no reflash:
+- LEFT/RIGHT mirrored: flip the sign, `PS_CFG:X_GAIN=-1.7`.
 - UP/DOWN inverted: `PS_CFG:Y_GAIN=-1.7`.
-- Travel too small: raise the magnitude — `PS_CFG:X_GAIN=2.5`. (Not a bug on its own: at 20in
+- Travel too small: raise the magnitude, `PS_CFG:X_GAIN=2.5`. (Not a bug on its own: at 20in
   from an 85° FOV a ±6in head move only crosses ~40% of frame.)
 - Eye biased off-center at neutral: `PS_CFG:Y_BIAS=…` / `PS_CFG:X_BIAS=…` (`Y_BIAS`
   compensates for the camera mounting below the eye).
@@ -119,7 +119,7 @@ At ~1m frontal, read `conf`/`rawScore`. A clear frontal face should comfortably 
 lower it live (`PS_CFG:CONF=55`, …); if empty-frame noise produces `gate=PASS`, raise it.
 Record the value that stabilises tracking and put it in `PS_CONF_GATE_DEFAULT`.
 
-For reference, live IRIS runs `CONF=25` — don't copy that. It's a leftover from the Person
+For reference, live IRIS runs `CONF=25`. Don't copy that. It's a leftover from the Person
 Sensor's 0–255 scale (~10%) that predates the SEN0626 swap, not a tuned value. See
 [ENGINEERING_LOG.md](ENGINEERING_LOG.md) CG-S13.
 
@@ -132,15 +132,15 @@ Shorten it while bench-testing with `PS_CFG:LOST_MS=1500` so you're not waiting 
 
 ## 9. Edge tracking / flaky comms
 
-(a) Move to the field corners and hold — eye should reach its travel limit smoothly (no
-freeze / snap-back / drift). (b) Briefly interrupt the sensor TX wire — no crash; the eye
+(a) Move to the field corners and hold. Eye should reach its travel limit smoothly (no
+freeze / snap-back / drift). (b) Briefly interrupt the sensor TX wire. No crash; the eye
 holds, then wanders after ~3s, and re-locks when comms return.
 
 ## 10. Dual-eye (only if built with `#define DUAL_EYE`)
 
 Wire the second display (WIRING.md dual-eye table: CS9/DC8/RST6, shared SCK13/MOSI11),
 uncomment `#define DUAL_EYE`, reflash. **Expect:** both displays show an eye and track the
-same face together. Per-eye refresh is ~half single-eye (shared bus) — expected, not a fault.
+same face together. Per-eye refresh is ~half single-eye (shared bus), expected, not a fault.
 
 ---
 

@@ -1,6 +1,6 @@
 # CyclopsGaze
 
-**A face-tracking gaze demo on a single round LCD "eye" — and a drop-in replacement for the discontinued Useful Sensors Person Sensor.**
+**A face-tracking gaze demo on a single round LCD "eye," and a drop-in replacement for the discontinued Useful Sensors Person Sensor.**
 
 CyclopsGaze runs Chris Miller's [TeensyEyes](#credits) "uncanny eyes" on a 1.28"/240×240
 GC9A01A round display and makes the eye look at your face, driven by a DFRobot **SEN0626**
@@ -9,22 +9,22 @@ the now-discontinued Useful Sensors *Person Sensor* (SEN-21231) that drives the 
 of the [IRIS](#relation-to-iris) robot face.
 
 ![CyclopsGaze tracking a face](docs/media/cyclopsgaze_tracking.jpg)
-<!-- photos live in docs/media/ — see docs/media/README.md -->
+<!-- photos live in docs/media/, see docs/media/README.md -->
 
 ---
 
 ## Why this exists
 
 TeensyEyes renders great animated eyes, but on its own the eye just wanders. To give it a
-"soul" — to make it watch you — you need a face-detection sensor feeding a position into the
+"soul" (to make it watch you) you need a face-detection sensor feeding a position into the
 gaze target. In the parent [IRIS](#relation-to-iris) project that sensor was the Useful
 Sensors **Person Sensor (SEN-21231)**: a tiny I²C module returning face bounding boxes. It
-worked well, then got discontinued — a problem for a project meant to be publicly replicable,
-since buyers can't source a dead part.
+worked well, then got discontinued. That's a problem for a project meant to be publicly
+replicable, since buyers can't source a dead part.
 
 CyclopsGaze is the standalone testbed built to answer one question: can the DFRobot SEN0626
-(Modbus RTU over UART) be a true drop-in for the Person Sensor — same struct, same API, same
-gaze behavior — so the eyes keep their soul?
+(Modbus RTU over UART) be a true drop-in for the Person Sensor: same struct, same API, same
+gaze behavior, so the eyes keep their soul?
 
 Answer: yes. The SEN0626 driver here presents the exact `person_sensor_face_t` struct and
 method surface IRIS already consumes, so the parent project swapped it in with almost no
@@ -32,9 +32,9 @@ consumer-side edits. See [Status](#status).
 
 So this repo is two things at once:
 
-1. **A standalone demo** — Teensy + one round eye + one camera = an eye that follows your
+1. **A standalone demo**: Teensy + one round eye + one camera = an eye that follows your
    face. Buildable and runnable on its own.
-2. **A hardware/driver module of IRIS** — the publicly-sourceable gaze-sensor path, validated
+2. **A hardware/driver module of IRIS**: the publicly-sourceable gaze-sensor path, validated
    here in isolation before touching the live robot.
 
 ---
@@ -43,11 +43,11 @@ So this repo is two things at once:
 
 | Part | Role |
 |---|---|
-| **Teensy 4.1** (4.0 also works — identical pins) | MCU running TeensyEyes + the sensor driver |
+| **Teensy 4.1** (4.0 also works, identical pins) | MCU running TeensyEyes + the sensor driver |
 | **GC9A01A 240×240 round LCD** (1.28", SPI) | the "eye" (one for single-eye, two for dual-eye) |
 | **DFRobot SEN0626** Gravity AI vision camera (UART) | face detection → gaze target |
 
-The gaze pipeline is portable — the SEN0626 driver and TeensyEyes engine are plain C++, so
+The gaze pipeline is portable: the SEN0626 driver and TeensyEyes engine are plain C++, so
 the same approach ports to any board with a hardware UART + SPI and enough RAM for the eye
 framebuffer.
 
@@ -66,10 +66,10 @@ Full pin tables, wire colors, power notes, and the dual-eye layout: **[docs/WIRI
 | RST | 3 | | | |
 
 Two things that'll eat your bench time if you skip them:
-1. The SEN0626 breakout has a physical I²C/UART DIP switch — set it to UART. This firmware
+1. The SEN0626 breakout has a physical I²C/UART DIP switch. Set it to UART. This firmware
    is Modbus RTU over UART only, no I²C fallback.
 2. Check the sensor's *own* VCC pin reads ~3.2–3.3V under load, not just the Teensy's 3.3V
-   pin. An undervolted SEN0626 resets/freezes randomly — a known failure mode.
+   pin. An undervolted SEN0626 resets/freezes randomly, a known failure mode.
 
 ---
 
@@ -77,14 +77,14 @@ Two things that'll eat your bench time if you skip them:
 
 Physical mount designs (3D-printable and laser-cuttable) live in **[`hardware/`](hardware/)**:
 
-- **[`hardware/stl/`](hardware/stl/)** — 3D-printable parts (mounts, brackets, enclosures).
-- **[`hardware/lasercut/`](hardware/lasercut/)** — laser-cuttable 2D panels (SVG/DXF).
+- **[`hardware/stl/`](hardware/stl/)**: 3D-printable parts (mounts, brackets, enclosures).
+- **[`hardware/lasercut/`](hardware/lasercut/)**: laser-cuttable 2D panels (SVG/DXF).
 
-Scaffold only right now — both folders are empty aside from their own README placeholders.
+Scaffold only right now, both folders are empty aside from their own README placeholders.
 No dimensions for the GC9A01A display, the SEN0626 Gravity board, or mounting-hole positions
 have been measured yet. There's also an open design fork: the SEN0626's camera is physically
 separable from the rest of the Gravity board (bench finding, [docs/ENGINEERING_LOG.md](docs/ENGINEERING_LOG.md)
-"CG-S10"), which could allow a much smaller mount — but that finding itself is unverified
+"CG-S10"), which could allow a much smaller mount, but that finding itself is unverified
 (register behavior post-separation hasn't been confirmed). See
 [`hardware/README.md`](hardware/README.md) for what a first design needs to nail down, and
 the same REPO-ONLY → DEPLOYED → VERIFIED discipline the firmware uses.
@@ -99,17 +99,17 @@ the same REPO-ONLY → DEPLOYED → VERIFIED discipline the firmware uses.
   reports center X/Y + score)        person_sensor_face_t struct)      (x, y)          eye looking there)
 ```
 
-- **`src/sensors/SEN0626Sensor.{h,cpp}`** — the driver. Talks Modbus RTU (FC04 input
+- **`src/sensors/SEN0626Sensor.{h,cpp}`**: the driver. Talks Modbus RTU (FC04 input
   registers, device `0x72`) to the camera, auto-detects baud (115200 → 9600), and exposes the
   identical `person_sensor_face_t` struct + method surface as the Useful Sensors Person
-  Sensor. That byte-for-byte match is the whole point — it's why IRIS's existing code
+  Sensor. That byte-for-byte match is the whole point: it's why IRIS's existing code
   consumes it unchanged. The SEN0626 reports a face *center* (not a box), so the driver
   stores that center in both box edges; consumers recover the exact target. Protocol
   reference: **[docs/SEN0626_PROTOCOL.md](docs/SEN0626_PROTOCOL.md)**.
-- **`src/main.cpp`** — the gaze loop: read the sensor, gate on confidence, map the face
+- **`src/main.cpp`**: the gaze loop. Read the sensor, gate on confidence, map the face
   center to a gaze target with per-axis signed gain + bias, drive the eye. Falls back to
   idle wander when no face is present.
-- **`src/eyes/`, `src/displays/`** — Chris Miller's TeensyEyes engine (MIT), bundled largely
+- **`src/eyes/`, `src/displays/`**: Chris Miller's TeensyEyes engine (MIT), bundled largely
   verbatim. See [Credits](#credits).
 
 ---
@@ -139,12 +139,12 @@ written for someone new to PlatformIO: **[docs/BENCH_PROTOCOL.md](docs/BENCH_PRO
 ### Dual-eye (optional)
 
 Uncomment `#define DUAL_EYE` in `src/config.h` to drive a second GC9A01A. Both eyes share
-SPI0 with a separate CS each — the SEN0626 owns pins 0/1, which collides with the Teensy's
+SPI0 with a separate CS each. The SEN0626 owns pins 0/1, which collides with the Teensy's
 SPI1, so IRIS's two-bus layout can't be reused. Pin table in [docs/WIRING.md](docs/WIRING.md).
 
 ---
 
-## Tunables — live over serial, no reflash (`PS_CFG:`)
+## Tunables: live over serial, no reflash (`PS_CFG:`)
 
 Since CG-S13, tracking behavior tunes live over the same USB serial link you're already
 watching, ported from IRIS's own runtime-tuning protocol. Type a command, watch the eye
@@ -156,18 +156,18 @@ change on the next sample:
 | `PS_CFG:X_GAIN=f` / `PS_CFG:Y_GAIN=f` | Per-axis gaze range. Sign = direction (negate to un-mirror), magnitude = range. | `1.7` / `1.7` |
 | `PS_CFG:X_BIAS=f` / `PS_CFG:Y_BIAS=f` | Per-axis center offset. `Y_BIAS` compensates for the camera mounting below the eye. | `0.0` / `1.26` |
 | `PS_CFG:LOST_MS=n` | Time with no face before idle wander resumes. | `3000` |
-| `PS_CFG:FACING=0/1` | Require the `is_facing` bit — currently inert, SEN0626 has no facing register. | `0` |
-| `PS_CFG?` | Print all live values on one line. | — |
+| `PS_CFG:FACING=0/1` | Require the `is_facing` bit (currently inert, SEN0626 has no facing register). | `0` |
+| `PS_CFG?` | Print all live values on one line. | n/a |
 
-Values are RAM-only and reset with the board — once a value proves out on the bench, write it
+Values are RAM-only and reset with the board. Once a value proves out on the bench, write it
 back into the matching `*_DEFAULT` constant in `src/config.h` so it survives a power cycle.
 Full reference: [docs/BENCH_PROTOCOL.md](docs/BENCH_PROTOCOL.md) § Live tuning.
 
 The `targetN = rawN * gain + bias` shaping model, the confidence-scale choice, and the
-`PS_CFG:` protocol itself are all ported from the parent project's proven tuning — see
+`PS_CFG:` protocol itself are all ported from the parent project's proven tuning, see
 [docs/IRIS_INTEGRATION.md](docs/IRIS_INTEGRATION.md). One other `config.h` knob worth
 knowing: `SEN0626_SERIAL` selects which hardware UART the sensor is wired to (default
-`Serial1`) — IRIS's own install uses a different port because its pin 0 is already spoken
+`Serial1`). IRIS's own install uses a different port because its pin 0 is already spoken
 for by an eye's chip-select.
 
 ---
@@ -177,7 +177,7 @@ for by an eye's chip-select.
 **Standalone gaze tracking: bench-VERIFIED** (direction, range, and center all confirmed
 live on a Teensy 4.1 + SEN0626 + GC9A01A).
 
-**Integrated into IRIS: yes, and tracking live** — the SEN0626 driver was swapped in for the
+**Integrated into IRIS: yes, and tracking live.** The SEN0626 driver was swapped in for the
 dead Person Sensor on IRIS's eyes and is confirmed detecting/tracking faces in the real robot.
 
 One open item, and it's the top re-bench priority: two rounds of code change since the last
@@ -219,7 +219,7 @@ Details of the integration, the deliberate driver divergence, and the bugs the s
 CyclopsGaze/
 ├── src/                    firmware (driver, gaze loop, bundled TeensyEyes engine)
 ├── integration/            ready-to-copy drop-in adapters for IRIS's two consumers
-├── hardware/                mounts & enclosures (STL + laser-cut) — see below
+├── hardware/                mounts & enclosures (STL + laser-cut), see below
 │   ├── stl/                3D-printable parts
 │   └── lasercut/           laser-cuttable panels (SVG/DXF)
 ├── docs/                   wiring, protocol, bench procedure, IRIS integration, eng. log
@@ -239,17 +239,17 @@ CyclopsGaze is a derivative work built on Chris Miller's MIT-licensed TeensyEyes
 original sensor + gaze layer on top. To be precise about who authored what:
 
 **Original to this project** (© the CyclopsGaze author):
-- `src/sensors/SEN0626Sensor.{h,cpp}` — the SEN0626 Modbus/UART driver: a clean
+- `src/sensors/SEN0626Sensor.{h,cpp}`: the SEN0626 Modbus/UART driver, a clean
   reimplementation that replaces TeensyEyes' I²C Person Sensor entirely, matching the Person
   Sensor struct so consumers are unchanged.
 - The `integration/` drop-in adapters, and the gaze/tracking logic in `src/main.cpp` +
   `src/config.h`.
-- The **nordicBlue** eye — generated from the author's own iris/sclera artwork via
+- The **nordicBlue** eye, generated from the author's own iris/sclera artwork via
   TeensyEyes' image-conversion tooling.
 
 **From TeensyEyes** (MIT © 2022 Chris Miller), bundled here:
 - The eye-rendering engine (`EyeController`), the GC9A01A display driver, and the
-  polar/displacement maps (`disp_*`, `polarAngle_*`) — several files verbatim,
+  polar/displacement maps (`disp_*`, `polarAngle_*`), several files verbatim,
   `EyeController` modified.
 - The eyelid geometry and the image-conversion tooling used to generate the eye above.
 
@@ -257,12 +257,12 @@ File-level breakdown: **[docs/ATTRIBUTION.md](docs/ATTRIBUTION.md)**.
 
 ## Credits
 
-- **TeensyEyes — the eye-rendering engine**, MIT © 2022 **Chris Miller**. CyclopsGaze bundles
+- **TeensyEyes, the eye-rendering engine**, MIT © 2022 **Chris Miller**. CyclopsGaze bundles
   it (`src/eyes/`, `src/displays/`) largely verbatim. TeensyEyes is itself adapted from
   **Adafruit's Uncanny Eyes / M4_Eyes** (also MIT).
-- **DFRobot** — SEN0626 Gravity AI vision camera and its `DFRobot_GestureFaceDetection`
+- **DFRobot**: SEN0626 Gravity AI vision camera and its `DFRobot_GestureFaceDetection`
   library / Modbus register documentation.
-- **Useful Sensors** — the original *Person Sensor* (SEN-21231) whose interface this project
+- **Useful Sensors**: the original *Person Sensor* (SEN-21231) whose interface this project
   reimplements.
 - Display driver: **GC9A01A_t3n** by KurtE / mjs513.
 
