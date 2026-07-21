@@ -1,7 +1,7 @@
 # CyclopsGaze — Engineering Rules
 
-Short, enforceable discipline for anyone (human or AI) working in this repo. The longer
-"why" lives in [CLAUDE.md](CLAUDE.md); this is the checklist form.
+Short, enforceable rules for anyone working in this repo. The longer "why" lives in
+[CLAUDE.md](CLAUDE.md); this is the checklist form.
 
 ## Source of truth
 - The **local repo** is authoritative; GitHub is the mirror.

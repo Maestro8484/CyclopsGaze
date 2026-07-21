@@ -5,8 +5,8 @@ work, each under its own license.
 
 ## What's original in this repo vs. bundled
 
-CyclopsGaze is a **derivative work** of Chris Miller's TeensyEyes. The table below is the honest
-file-level split (verified by diffing against pristine `github.com/chrismiller/TeensyEyes`).
+CyclopsGaze is a derivative work of Chris Miller's TeensyEyes. The table below is the
+file-level split, verified by diffing against pristine `github.com/chrismiller/TeensyEyes`.
 
 | Component | Origin |
 |---|---|
@@ -20,11 +20,11 @@ file-level split (verified by diffing against pristine `github.com/chrismiller/T
 | `src/eyes/EyeController.h` | TeensyEyes — **modified** (~305 of ~700 lines changed) |
 | `src/eyes/eyes.h`, `src/displays/*` | TeensyEyes — largely / entirely **verbatim** |
 
-**In plain terms:** the eye-rendering engine, display driver, and eyelid/polar maps are Chris
-Miller's (MIT — some copied byte-for-byte). The SEN0626 face-tracking driver, the gaze-integration
-layer, and the `nordicBlue` eye's texture art are the CyclopsGaze author's original work. The
-combined work is distributed under MIT, preserving Chris Miller's copyright and license for his
-portions.
+In plain terms: the eye-rendering engine, display driver, and eyelid/polar maps are Chris
+Miller's (MIT — some copied byte-for-byte). The SEN0626 face-tracking driver, the
+gaze-integration layer, and the `nordicBlue` eye's texture art are the CyclopsGaze author's
+original work. The combined work is distributed under MIT, preserving Chris Miller's
+copyright and license for his portions.
 
 ## Bundled in this repo (`src/`)
 
