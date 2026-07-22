@@ -19,6 +19,27 @@ the current BOM, and it is not the part doing the hard work — the SEN0626 does
 This is **not** a response to any fault. Standalone tracking was bench-VERIFIED at CG-S8 and the
 driver is live in IRIS. Nothing here changes that.
 
+### This does not contradict the CG-S3 tombstone — read that entry carefully
+
+[CHANGELOG.md](../CHANGELOG.md) CG-S3 Part A records that "the old ESP32-S3 + OV2640 approach
+(`../OGLE`) was tombstoned/archived … research favors T4.1 + SEN0626." A future session will hit
+that line and this document and think one of them is wrong. Neither is — they are about different
+machines doing different work:
+
+| | OGLE (retired) | This study |
+|---|---|---|
+| What runs the face detection | **The ESP32-S3 itself** (OV2640 + on-chip esp-dl inference) | **The SEN0626**, on its own AI processor |
+| The S3's job | Camera driver + neural network + tracking + link | Read 4 Modbus registers at ~6.7 Hz; draw eyes |
+| Why it failed / whether that applies | Never reached reliable tracking at IRIS's real bench distance and lighting | **Does not apply.** That workload is gone. |
+
+OGLE was retired because **on-chip vision on an S3 was not good enough**. This proposal asks the S3
+to do no vision at all — the SEN0626 does its own inference and reports a face center, exactly as it
+does for the Teensy today. The retired verdict is about a workload this design does not have.
+
+What *is* new and unproven here is the render load (§ 5), which OGLE never carried — OGLE fed gaze to
+a separate Teensy over USB-CDC and drew nothing. So the risk profile is not merely different from
+OGLE's, it is close to disjoint.
+
 ## 2. BOM comparison
 
 Prices verified 2026-07-21 by fetching the vendor pages this session. Not recalled.
