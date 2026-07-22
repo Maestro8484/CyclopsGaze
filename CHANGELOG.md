@@ -393,7 +393,23 @@ single-eye Teensy build. Notable: **domestically the display dominates, not the 
 panels $35.00 vs board plus camera $29.90), and **DigiKey cannot complete the cart** since its
 only round GC9A01A listing is marked obsolete, so a domestic build is two vendors.
 
-README gained the standalone-animatronic framing and links to the BOM.
+README gained the standalone-animatronic framing, links to the BOM, and a new **Build paths**
+section: four routes (A single tracking eye VERIFIED, B no-camera wandering prop, C dual-eye
+compiles-but-never-run, D the unbuilt ESP32-S3 path) each with cost, steps, doc links and an
+honest status, plus a pick-by-what-you-want table.
+
+Two repo defects fixed:
+- The README's hero image pointed at `docs/media/cyclopsgaze_tracking.jpg`, which has never
+  existed (introduced 3ec8496, CG-S12), so the public GitHub page rendered a broken image.
+  The line is now commented out with instructions to restore it, and `docs/media/README.md`
+  says so.
+- **BENCH_PROTOCOL.md gained step 11, a frame-rate baseline.** `SHOW_FPS` has sat commented
+  out at `src/displays/Display.h:5` since the engine was bundled, so this project's frame rate
+  has never been measured on any board. That missing number is what blocks the ESP32-S3
+  evaluation from being judged at all. The step documents the one-line change, notes the
+  counter renders on the eye rather than to serial, and flags that the reading is slightly
+  pessimistic because drawing it costs time. The protocol header now calls out steps 10 and 11
+  as the two that have never been executed.
 
 - Recommendation: **buy nothing yet.** Two cheap measurements gate everything. First uncomment
   `SHOW_FPS` (`src/displays/Display.h:5`) and record the Teensy's frame rate, which **has

@@ -201,10 +201,11 @@ replays the loop. Regenerate it if these numbers ever need re-deriving.
 **Do not port the project and then discover the frame rate.** Two measurements, in order,
 neither needing a new board.
 
-1. **Uncomment `SHOW_FPS` at `src/displays/Display.h:5`, flash the Teensy, record the number.**
-   One line, one flash. *Nobody has ever measured this project's frame rate on any board*, so
-   there is currently no baseline for "fast enough" to mean anything against. Cheapest
-   high-value measurement available.
+1. **Get the Teensy baseline: [BENCH_PROTOCOL.md](BENCH_PROTOCOL.md) step 11.** One
+   commented-out line at `src/displays/Display.h:5`, one flash, read the counter off the eye.
+   *Nobody has ever measured this project's frame rate on any board*, so there is currently no
+   baseline for "fast enough" to mean anything against. Cheapest high-value measurement
+   available, and everything in this document is unanchored until it exists.
 2. **Run the real inner loop over the real tables on an S3, record the number.** No sensor, no
    eyelids, no Display abstraction. Report it three ways: tables in flash, tables in SRAM,
    32 B versus 64 B cache lines.

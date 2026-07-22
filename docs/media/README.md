@@ -3,9 +3,12 @@
 Photos and video of CyclopsGaze on the bench.
 
 Drop image/video files here and reference them from the top-level [README.md](../../README.md)
-and the docs. The main README expects a hero shot at:
+and the docs. The main README has a hero-shot line ready to go at:
 
     docs/media/cyclopsgaze_tracking.jpg
+
+That line is currently **commented out** in the README so the public page does not render a
+broken image. Once you add the file, uncomment it (it sits just under the intro paragraph).
 
 Suggested shots to include:
 

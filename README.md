@@ -8,8 +8,11 @@ AI vision camera over UART. Its real job: prove the SEN0626 can stand in, byte-f
 the now-discontinued Useful Sensors *Person Sensor* (SEN-21231) that drives the gaze "soul"
 of the [IRIS](#relation-to-iris) robot face.
 
+<!-- Hero shot: uncomment the line below once docs/media/cyclopsgaze_tracking.jpg exists.
+     Left commented so the public README does not render a broken image.
+     Shot list and file conventions: docs/media/README.md
 ![CyclopsGaze tracking a face](docs/media/cyclopsgaze_tracking.jpg)
-<!-- photos live in docs/media/, see docs/media/README.md -->
+-->
 
 ---
 
@@ -81,6 +84,72 @@ Two things that'll eat your bench time if you skip them:
    is Modbus RTU over UART only, no I²C fallback.
 2. Check the sensor's *own* VCC pin reads ~3.2–3.3V under load, not just the Teensy's 3.3V
    pin. An undervolted SEN0626 resets/freezes randomly, a known failure mode.
+
+---
+
+## Build paths
+
+Four routes to a working eye, in descending order of how proven they are. Pick by what you
+want and how much risk you are willing to carry. Costs are domestic parts only, verified
+2026-07-21, itemised in [docs/BOM.md](docs/BOM.md).
+
+### Path A: one eye that tracks a face. **VERIFIED, start here.**
+
+The only configuration confirmed working on real hardware (CG-S8: direction, range and
+centering all observed on a bench). Teensy 4.1 or 4.0, one GC9A01A, one SEN0626. **~$64.**
+
+1. Wire it: [docs/WIRING.md](docs/WIRING.md), single-eye table.
+2. Check the two gotchas first: SEN0626 DIP switch on **UART**, and the sensor's own VCC pin
+   reading 3.2 to 3.3V under load. These are the only two hardware faults that have ever cost
+   this project a bench session.
+3. Build and flash: `pio run -e cyclopsgaze -t upload`.
+4. Walk [docs/BENCH_PROTOCOL.md](docs/BENCH_PROTOCOL.md) top to bottom, steps 0 through 9.
+5. Tune live over serial with `PS_CFG:` (no reflash), then write keepers back into
+   `src/config.h`.
+
+⚠ One caveat specific to right now: two rounds of code change since that bench pass (CG-S12,
+CG-S13) have not been re-observed on hardware. They compile clean and are structurally
+equivalent, but re-run the protocol before treating this as re-VERIFIED. See [Status](#status).
+
+### Path B: an eye with no camera, wandering on its own. **Cheapest, least proven.**
+
+Skip the SEN0626 entirely. The eye blinks and saccades autonomously with no face input.
+Suitable for a prop that needs to look alive rather than look *at* you. **~$50** on Teensy,
+**~$32** on ESP32-S3 once Path D lands. Same wiring as Path A minus the four sensor wires, and
+nothing to configure. Not separately bench-confirmed as its own configuration, though idle
+wander is exercised by BENCH_PROTOCOL step 8.
+
+### Path C: two eyes. **Compiles, never run on hardware.**
+
+Uncomment `#define DUAL_EYE` in `src/config.h`, wire the second display per the dual-eye table
+in [docs/WIRING.md](docs/WIRING.md) (CS 9 / DC 8 / RST 6, sharing SCK 13 and MOSI 11). Both
+eyes track the same face off the one camera. **~$81** on Teensy 4.1.
+
+Both eyes share SPI0 because the SEN0626 owns pins 0 and 1, which collides with the Teensy's
+SPI1. Per-eye refresh is roughly half single-eye as a result, which is expected rather than a
+fault. **BENCH_PROTOCOL step 10 has never been executed**, so this path is unproven end to
+end on any board.
+
+### Path D: the cheap ESP32-S3 build. **Nothing built yet. Contributions welcome.**
+
+Replaces the single-sourced $31.50 Teensy with a $15.00 commodity board, taking a two-eye
+build to **~$65** domestic or **~$47** with generic displays. The engineering case, the
+portability audit, the three known code blockers and the measured render cost are all written
+up in [docs/ESP32_S3_MIGRATION.md](docs/ESP32_S3_MIGRATION.md).
+
+It is a real port, not a recompile: the bundled `GC9A01A_t3n` display driver is Teensy-only
+and has to be replaced (the `Display.h` abstraction already exists to make that a contained
+change). Staged plan is in § 8 of that document, and stage 0 is a frame-rate measurement that
+gates everything after it.
+
+### Which to pick
+
+| You want | Path | Status |
+|---|---|---|
+| It to work this weekend | **A** | VERIFIED |
+| A prop that looks alive, cheapest | **B** | untested as a standalone config |
+| A face, not a cyclops | **C** | compiles, never run |
+| To cut cost and don't mind being first | **D** | not built |
 
 ---
 
@@ -233,7 +302,7 @@ CyclopsGaze/
 ├── hardware/                mounts & enclosures (STL + laser-cut), see below
 │   ├── stl/                3D-printable parts
 │   └── lasercut/           laser-cuttable panels (SVG/DXF)
-├── docs/                   wiring, protocol, bench procedure, IRIS integration, eng. log
+├── docs/                   BOM, wiring, protocol, bench procedure, IRIS integration, eng. log
 │   ├── archive/            raw session-by-session development handoffs (historical)
 │   └── media/              photos & video
 ├── CHANGELOG.md            full development history (CG-S1 … CG-S13)

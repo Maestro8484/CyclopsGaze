@@ -9,6 +9,11 @@ per-axis gain/bias) compiles clean but hasn't been re-observed on the bench sinc
 Steps 5–7 below re-confirm it. Firmware in repo: **CG-S13** (bump `FIRMWARE_VERSION` in
 `src/config.h` before flashing if you change code).
 
+Two measurements have never been taken at all, on any board: **step 10** (dual-eye, which has
+only ever been compiled) and **step 11** (frame rate). If you have the rig up, capture them.
+Step 11 in particular is one commented-out line away and it is the missing baseline the whole
+ESP32-S3 cost evaluation is currently blocked on.
+
 CG-S13 note: tune live, don't reflash. Every gate/gain/bias/timeout below is now settable
 over the same USB serial link you're watching, via the `PS_CFG:` protocol ported from IRIS.
 See [§ Live tuning](#live-tuning-ps_cfg) before you start. Type a value, watch the eye change.
@@ -141,6 +146,29 @@ holds, then wanders after ~3s, and re-locks when comms return.
 Wire the second display (WIRING.md dual-eye table: CS9/DC8/RST6, shared SCK13/MOSI11),
 uncomment `#define DUAL_EYE`, reflash. **Expect:** both displays show an eye and track the
 same face together. Per-eye refresh is ~half single-eye (shared bus), expected, not a fault.
+
+## 11. Frame-rate baseline (do this once, record the number)
+
+**Nobody has ever measured this project's frame rate on any board.** That means there is no
+reference point for "fast enough", which currently blocks the ESP32-S3 evaluation
+([ESP32_S3_MIGRATION.md](ESP32_S3_MIGRATION.md) § 6) from being judged at all. It is a
+one-line change. Please capture it on any flash where you have the rig up.
+
+1. Uncomment `#define SHOW_FPS` at [`src/displays/Display.h:5`](../src/displays/Display.h#L5).
+2. Bump `FIRMWARE_VERSION` in `src/config.h` (it is a code change).
+3. Rebuild and flash.
+4. **The counter is drawn on the eye itself**, not printed to serial: a white number near the
+   middle of the display at (110, 110), refreshed once a second. Let it settle and read it.
+5. Record it in [ENGINEERING_LOG.md](ENGINEERING_LOG.md) against the board, single or dual
+   eye, and whether a face was being tracked. Tracking and idle wander are not necessarily the
+   same cost, so note which you measured.
+6. Re-comment `SHOW_FPS` and reflash for normal use. The counter overdraws the middle of the
+   iris, so you do not want it left on.
+
+Two caveats on the number. Drawing the counter costs time itself, so the reading is slightly
+pessimistic. And the counter is per-display, so in a dual-eye build each display reports its
+own rate and the two are roughly half the single-eye figure by design (shared SPI bus, one eye
+rendered per `renderFrame()` call).
 
 ---
 
