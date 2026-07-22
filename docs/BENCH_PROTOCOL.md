@@ -6,7 +6,7 @@ baud.
 
 Re-running this is the #1 priority on the next flash. The CG-S12 code sync (raw-score gate +
 per-axis gain/bias) compiles clean but hasn't been re-observed on the bench since the change.
-Steps 5–7 below re-confirm it. Firmware in repo: **CG-S13** (bump `FIRMWARE_VERSION` in
+Steps 5–7 below re-confirm it. Firmware in repo: **CG-S15** (bump `FIRMWARE_VERSION` in
 `src/config.h` before flashing if you change code).
 
 Two measurements have never been taken at all, on any board: **step 10** (dual-eye, which has
@@ -41,7 +41,7 @@ pio device list
 pio run -e cyclopsgaze -t upload
 pio device monitor -b 115200
 ```
-**Expect:** `[CG] CyclopsGaze CG-S13`
+**Expect:** `[CG] CyclopsGaze CG-S15`
 **PASS:** version line matches `config.h` `FIRMWARE_VERSION`. (You can also ask any time by
 typing `VERSION` into the monitor.)
 
@@ -68,6 +68,29 @@ Each accepted key echoes `[DBG] PS_CFG KEY=value`. An unimplemented key answers
 Values are RAM-only and reset with the board. There's no `ps_config.json` here the way IRIS
 has on its Pi4. When a value proves out, write it into `src/config.h` (the `*_DEFAULT`
 constants) and reflash, or it's lost on the next power cycle.
+
+## Eye sets (`EYE:`)
+
+Separate command namespace from `PS_CFG:` (which is IRIS-verbatim and must stay that way).
+Two sets ship as of CG-S15, `nordicBlue` and `hazel`, auto-rotating every 20s.
+
+| Command | Effect |
+|---|---|
+| `EYE?` | list sets, current set, auto state and interval |
+| `EYE:next` | advance now |
+| `EYE:hazel` / `EYE:nordicBlue` | select by name (case-insensitive); **turns auto-rotation off** |
+| `EYE:AUTO=0/1` | stop / start rotation |
+| `EYE:MS=n` | interval in ms, floored at 1000 |
+
+Each change echoes `[CG] EYE set=N name=… (why)`. An unrecognised name answers
+`[CG] EYE UNKNOWN set …` and changes nothing. Turn rotation off (`EYE:AUTO=0`) before running
+the tracking steps below, so the look isn't changing under you mid-measurement.
+
+**Unverified as of CG-S15:** the whole `EYE:` feature compiles for single and dual eye but has
+never been flashed. Confirm on the next bench pass: boot line reports `sets=2 start=nordicBlue`,
+the eye visibly changes appearance ~20s later, `EYE:hazel` switches immediately and reports
+`auto=0`, `EYE?` lists both names, a typo'd name changes nothing, and gaze tracking continues
+across a swap without a jump or freeze.
 
 ## 3. SEN0626 detect (baud + PID)
 

@@ -16,14 +16,15 @@ file-level split, verified by diffing against pristine `github.com/chrismiller/T
 | `src/config.h` | **Mostly original**: tunables + this project's wiring/eye setup |
 | `nordicBlue` eye **texture** (`nordicBlue.h` iris/sclera data) | **Original art**: generated from the author's own iris/sclera image via TeensyEyes' image-conversion tooling |
 | `nordicBlue.h` **eyelid geometry** | TeensyEyes, identical to its stock 240×240 eyelid shape |
-| `polarDist_240_125_69_0.*`, `disp_240_125.*`, `polarAngle_240.*` | TeensyEyes tooling, generated maps (verbatim / for a chosen iris radius) |
+| `hazel.h` (CG-S15) | **TeensyEyes, verbatim.** Chris Miller's eye in its entirety, artwork included. Copied unmodified from upstream as a second selectable eye set. Not original to this project in any part. |
+| `polarDist_240_125_69_0.*`, `polarDist_240_125_60_0.*`, `disp_240_125.*`, `polarAngle_240.*` | TeensyEyes tooling, generated maps (verbatim / for a chosen iris radius). The `_60_0` variant was copied in at CG-S15 because `hazel` uses iris radius 60. |
 | `src/eyes/EyeController.h` | TeensyEyes, **modified** (~305 of ~700 lines changed) |
 | `src/eyes/eyes.h`, `src/displays/*` | TeensyEyes, largely / entirely **verbatim** |
 
-In plain terms: the eye-rendering engine, display driver, and eyelid/polar maps are Chris
-Miller's (MIT; some copied byte-for-byte). The SEN0626 face-tracking driver, the
-gaze-integration layer, and the `nordicBlue` eye's texture art are the CyclopsGaze author's
-original work. The combined work is distributed under MIT, preserving Chris Miller's
+In plain terms: the eye-rendering engine, display driver, eyelid/polar maps, and the entire
+`hazel` eye are Chris Miller's (MIT; much of it copied byte-for-byte). The SEN0626
+face-tracking driver, the gaze-integration layer, the eye-set rotation and `EYE:` protocol,
+and the `nordicBlue` eye's texture art are the CyclopsGaze author's original work. The combined work is distributed under MIT, preserving Chris Miller's
 copyright and license for his portions.
 
 ## Bundled in this repo (`src/`)

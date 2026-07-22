@@ -32,6 +32,42 @@ static float    psXBias          = GAZE_X_BIAS_DEFAULT;         // PS_CFG:X_BIAS
 static float    psYBias          = GAZE_Y_BIAS_DEFAULT;         // PS_CFG:Y_BIAS=f
 static bool     psLedEnabled     = false;                       // PS_CFG:LED=0/1
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Eye appearance sets: the `EYE:` serial protocol (CG-S15)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Rotates the eye's LOOK (iris/sclera artwork + eyelid shape) on a timer, and
+// lets the operator pick one over serial. Independent of gaze: switching the
+// look does not disturb tracking, and rotation runs whether or not a face is
+// present.
+//
+// This is a SEPARATE command namespace from PS_CFG: on purpose. PS_CFG's parser,
+// key set and ack wording are IRIS-verbatim so the two main.cpp files stay
+// diffable (see processSerial below); adding eye keys into it would break that
+// for a feature IRIS does not have. EYE: is CyclopsGaze-only and IRIS's
+// iris_post.py ack regex cannot match it.
+//
+// The set list itself lives in config.h. Names come from EyeDefinition::name
+// (eyes.h), so there is no parallel name table that can drift out of sync.
+static uint8_t  eyeSetIndex     = 0;
+static bool     eyeAutoRotate   = EYE_AUTO_ROTATE_DEFAULT;
+static uint32_t eyeRotateMs     = EYE_ROTATE_MS_DEFAULT;
+static uint32_t eyeLastSwitchMs = 0;
+
+// Swap the live eye definition(s). EyeController::updateDefinitions stores a
+// POINTER to each definition, so the argument must outlive the call --
+// eyeDefinitions is a config.h global, which satisfies that. It also sets
+// drawAll, so the next renderFrame() repaints the whole eye rather than only
+// the area between the eyelids.
+static void applyEyeSet(size_t idx, const char *why) {
+  if (!eyes || idx >= eyeDefinitions.size()) return;
+  eyeSetIndex = (uint8_t)idx;
+  eyes->updateDefinitions(eyeDefinitions.at(idx));
+  eyeLastSwitchMs = millis();
+  Serial.printf("[CG] EYE set=%u name=%s (%s)\n",
+                eyeSetIndex, eyeDefinitions.at(idx)[0].name, why);
+}
+
 static constexpr uint32_t SERIAL_BUF_SIZE = 40;  // matches IRIS; longest PS_CFG line is ~18 chars
 static char    serialBuf[SERIAL_BUF_SIZE];
 static uint8_t serialBufLen = 0;
@@ -99,6 +135,51 @@ static void processSerial() {
 
         } else if (strcmp(serialBuf, "VERSION") == 0) {
           Serial.printf("[CG] CyclopsGaze %s\n", FIRMWARE_VERSION);
+
+        } else if (strncmp(serialBuf, "EYE:", 4) == 0) {
+          // CyclopsGaze-only (CG-S15). See the EYE: notes above processSerial.
+          const char *arg = serialBuf + 4;
+          if (strncmp(arg, "AUTO=", 5) == 0) {
+            eyeAutoRotate = (atoi(arg + 5) != 0);
+            eyeLastSwitchMs = millis();  // restart the dwell, don't fire instantly
+            Serial.printf("[CG] EYE AUTO=%d\n", eyeAutoRotate ? 1 : 0);
+          } else if (strncmp(arg, "MS=", 3) == 0) {
+            uint32_t v = (uint32_t)atol(arg + 3);
+            // Floor it. Each swap forces a full-screen repaint, so an interval
+            // near the frame time would leave the eye permanently redrawing.
+            if (v < 1000) v = 1000;
+            eyeRotateMs = v;
+            eyeLastSwitchMs = millis();
+            Serial.printf("[CG] EYE MS=%lu\n", (unsigned long)eyeRotateMs);
+          } else if (strcmp(arg, "next") == 0) {
+            applyEyeSet((eyeSetIndex + 1) % eyeDefinitions.size(), "next");
+          } else {
+            bool found = false;
+            for (size_t i = 0; i < eyeDefinitions.size(); i++) {
+              if (strcasecmp(arg, eyeDefinitions.at(i)[0].name) == 0) {
+                // An explicit pick beats the timer, otherwise the operator's
+                // choice would be silently overwritten within eyeRotateMs.
+                eyeAutoRotate = false;
+                applyEyeSet(i, "named");
+                found = true;
+                break;
+              }
+            }
+            if (!found) {
+              Serial.printf("[CG] EYE UNKNOWN set %s\n", arg);
+            }
+          }
+
+        } else if (strcmp(serialBuf, "EYE?") == 0) {
+          Serial.printf("[CG] EYE_DUMP current=%u name=%s auto=%d ms=%lu count=%u sets:",
+                        eyeSetIndex, eyeDefinitions.at(eyeSetIndex)[0].name,
+                        eyeAutoRotate ? 1 : 0, (unsigned long)eyeRotateMs,
+                        (unsigned)eyeDefinitions.size());
+          for (size_t i = 0; i < eyeDefinitions.size(); i++) {
+            Serial.print(' ');
+            Serial.print(eyeDefinitions.at(i)[0].name);
+          }
+          Serial.println();
         }
       }
     } else {
@@ -120,10 +201,25 @@ void setup() {
   randomSeed(analogRead(A0));
   initEyes(true, true, true);
   eyes->setTargetPupil(0.40f, 300);
+
+  // Start the rotation dwell from the end of setup, not from boot, so the first
+  // set gets its full interval rather than a partial one.
+  eyeLastSwitchMs = millis();
+  Serial.printf("[CG] EYE sets=%u start=%s rotate=%s every %lums\n",
+                (unsigned)eyeDefinitions.size(), eyeDefinitions.at(0)[0].name,
+                eyeAutoRotate ? "on" : "off", (unsigned long)eyeRotateMs);
 }
 
 void loop() {
   processSerial();
+
+  // Eye-set auto-rotation (CG-S15). Deliberately independent of the gaze block
+  // below: the look changes on its own timer whether or not a face is present,
+  // and swapping it does not touch tracking state.
+  if (eyeAutoRotate && eyeDefinitions.size() > 1 &&
+      (millis() - eyeLastSwitchMs) >= eyeRotateMs) {
+    applyEyeSet((eyeSetIndex + 1) % eyeDefinitions.size(), "auto");
+  }
 
   bool sampled = sensor.read();
 

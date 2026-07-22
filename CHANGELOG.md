@@ -418,3 +418,49 @@ Two repo defects fixed:
 - Status: REPO-ONLY, docs only. Nothing built for S3, nothing flashed, no frame rate observed
   anywhere. Two-eye rendering has never run on hardware on any board. Re-running
   docs/BENCH_PROTOCOL.md on the Teensy remains the standing #1 priority.
+
+## CG-S15 (2026-07-21) - second eye set (hazel) + rotation + the `EYE:` protocol
+
+The firmware carried exactly **one** eye set (`nordicBlue`) since CG-S1. It now carries two and
+switches between them on a timer or on command.
+
+- Added **`hazel`**, copied verbatim from upstream TeensyEyes along with the
+  `polarDist_240_125_60_0` table it needs (`hazel` uses iris radius 60; `nordicBlue` uses 69,
+  so the existing `_69_0` table could not be reused). `polarAngle_240` and `disp_240_125` were
+  already here and are shared. **`hazel` is Chris Miller's work in its entirety, artwork
+  included** -- docs/ATTRIBUTION.md and the README credits updated to say so plainly, since
+  until now the only bundled eye's texture art was original to this project.
+- **Prior art, not invention:** upstream TeensyEyes already solves eye switching with an outer
+  array of eye sets plus `EyeController::updateDefinitions()`, driven by an index
+  (`src/main.cpp:75-76` upstream, `std::array<std::array<EyeDefinition,2>,13>` in its
+  config.h). CyclopsGaze already had `updateDefinitions()` and the same
+  `std::array<std::array<EyeDefinition,N>,1>` shape, just trimmed to a single set. This change
+  restores the upstream mechanism rather than adding a new one.
+- **`EYE:` serial protocol** (`EYE?`, `EYE:next`, `EYE:<name>`, `EYE:AUTO=0/1`, `EYE:MS=n`).
+  Deliberately a **separate command namespace from `PS_CFG:`**: PS_CFG's parser, key set and
+  `[DBG] PS_CFG k=v` ack wording are IRIS-verbatim so the two main.cpp files stay diffable, and
+  folding eye keys into it would break that for a feature IRIS does not have. IRIS's
+  iris_post.py ack regex cannot match an `EYE:` line.
+- Auto-rotation every **20 s** by default (`EYE_ROTATE_MS_DEFAULT`, `EYE_AUTO_ROTATE_DEFAULT`
+  in config.h; runtime-tunable, RAM-only like the `ps*` values). Selecting a set by name turns
+  rotation off, so an operator's explicit pick is not silently overwritten seconds later.
+  Interval is floored at 1000 ms because each swap sets `drawAll` and forces a full repaint.
+- Set names are read from `EyeDefinition::name` rather than a parallel string table, so the
+  serial interface cannot drift out of sync with the actual set list.
+- Constraint documented in config.h and the README: **all sets must share
+  `polar.mapRadius`** (240 here). The gaze position in EyeController is stored in mapRadius
+  units and is not rescaled across a definition swap. Verified both eyes are 240 before
+  shipping this.
+- Adding further eyes is now a config edit: copy the header plus its `polarDist_*` table, add
+  the include, add a row. Upstream ships ~30 eyes. Cost is ~280 KB flash each.
+
+- `FIRMWARE_VERSION` CG-S13 → **CG-S15** (CG-S14 was docs-only and did not bump).
+- Both builds clean. Single-eye FLASH code 119468 / data 646808, RAM1 free 375872;
+  `-DDUAL_EYE` code 119660 / data 647832, RAM1 free 374848. Flash data grew 362056 → 646808,
+  i.e. **+284,752 bytes**, matching the predicted +279,632 for hazel's textures plus the extra
+  polarDist table. ~7.35 MB of flash still free.
+- Status: **REPO-ONLY.** Compiles for both configurations; **nothing was flashed and no eye
+  was observed changing.** Checks that would confirm are listed in docs/BENCH_PROTOCOL.md
+  § "Eye sets": boot line reads `sets=2 start=nordicBlue`, the look visibly changes ~20 s
+  later, `EYE:hazel` switches immediately and reports `auto=0`, `EYE?` lists both, a typo'd
+  name changes nothing, and gaze tracking survives a swap without a jump or freeze.

@@ -207,10 +207,12 @@ pio device monitor -b 115200        # serial monitor
 Expected serial on boot:
 
 ```
-[CG] CyclopsGaze CG-S13
+[CG] CyclopsGaze CG-S15
 [CG] SEN0626 found at 9600 (attempt 1)
+[CG] EYE sets=2 start=nordicBlue rotate=on every 20000ms
 [CG] faces=1 rawScore=72 conf=72 gate=PASS | rawX=311 rawY=40
 [CG]   -> raw=0.07,-0.03  target=0.12,-0.05  (gain 1.70/1.70 bias 0.00/1.26)
+[CG] EYE set=1 name=hazel (auto)
 ```
 
 First-flash walkthrough (enumerate → flash → detect → verify each tracking direction),
@@ -242,6 +244,34 @@ change on the next sample:
 Values are RAM-only and reset with the board. Once a value proves out on the bench, write it
 back into the matching `*_DEFAULT` constant in `src/config.h` so it survives a power cycle.
 Full reference: [docs/BENCH_PROTOCOL.md](docs/BENCH_PROTOCOL.md) § Live tuning.
+
+### Swapping the eye's look (`EYE:`)
+
+Since CG-S15 the firmware carries two eye sets, **`nordicBlue`** and **`hazel`**, and rotates
+between them every 20 seconds by default. The look is independent of gaze: switching it does
+not disturb tracking, and rotation runs whether or not a face is present.
+
+| Command | What it does |
+|---|---|
+| `EYE?` | List the available sets, the current one, and the rotation state |
+| `EYE:next` | Advance to the next set now |
+| `EYE:nordicBlue` / `EYE:hazel` | Select by name (case-insensitive). Also turns rotation **off**, so your pick isn't overwritten seconds later |
+| `EYE:AUTO=0` / `EYE:AUTO=1` | Stop / start auto-rotation |
+| `EYE:MS=n` | Rotation interval in ms (floored at 1000; each swap forces a full repaint) |
+
+Defaults live in `src/config.h` (`EYE_ROTATE_MS_DEFAULT`, `EYE_AUTO_ROTATE_DEFAULT`).
+
+`EYE:` is deliberately a separate command namespace from `PS_CFG:`. The latter is IRIS-verbatim
+down to its ack wording so the two projects' `main.cpp` files stay diffable, and adding eye keys
+to it would break that for a feature IRIS does not have.
+
+**Adding more eye sets** is a config change, not a code change. TeensyEyes ships around 30 eyes
+(`anime`, `cat`, `demon`, `dragon`, `doomRed`, `fizzgig`, `leopard`, `skull`, `snake`, ...).
+Copy the eye's header plus whichever `polarDist_240_<radius>_<irisRadius>_0` table it includes
+into `src/eyes/240x240/`, add the `#include`, and add a row to `eyeDefinitions` in
+`src/config.h`. Every set must share `polar.mapRadius` (240 here), because the gaze position is
+stored in mapRadius units and is not rescaled across a swap. Each additional eye costs roughly
+280 KB of flash, against ~7.3 MB free on a Teensy 4.1.
 
 The `targetN = rawN * gain + bias` shaping model, the confidence-scale choice, and the
 `PS_CFG:` protocol itself are all ported from the parent project's proven tuning, see
@@ -305,7 +335,7 @@ CyclopsGaze/
 ├── docs/                   BOM, wiring, protocol, bench procedure, IRIS integration, eng. log
 │   ├── archive/            raw session-by-session development handoffs (historical)
 │   └── media/              photos & video
-├── CHANGELOG.md            full development history (CG-S1 … CG-S13)
+├── CHANGELOG.md            full development history (CG-S1 … CG-S15)
 ├── CLAUDE.md               working context for Claude Code sessions
 ├── RULES.md                engineering discipline for this repo
 └── platformio.ini
@@ -326,12 +356,15 @@ original sensor + gaze layer on top. To be precise about who authored what:
   `src/config.h`.
 - The **nordicBlue** eye, generated from the author's own iris/sclera artwork via
   TeensyEyes' image-conversion tooling.
+- The eye-set rotation and the `EYE:` serial protocol.
 
 **From TeensyEyes** (MIT © 2022 Chris Miller), bundled here:
 - The eye-rendering engine (`EyeController`), the GC9A01A display driver, and the
   polar/displacement maps (`disp_*`, `polarAngle_*`), several files verbatim,
   `EyeController` modified.
 - The eyelid geometry and the image-conversion tooling used to generate the eye above.
+- The **hazel** eye in its entirety, artwork included, copied verbatim from upstream at CG-S15
+  as a second selectable eye set.
 
 File-level breakdown: **[docs/ATTRIBUTION.md](docs/ATTRIBUTION.md)**.
 

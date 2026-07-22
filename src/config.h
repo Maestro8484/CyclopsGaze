@@ -1,9 +1,10 @@
 #pragma once
 
-static constexpr char FIRMWARE_VERSION[] = "CG-S13";
+static constexpr char FIRMWARE_VERSION[] = "CG-S15";
 
 #include "eyes/eyes.h"
 #include "eyes/240x240/nordicBlue.h"
+#include "eyes/240x240/hazel.h"
 #include "eyes/EyeController.h"
 
 #define USE_GC9A01A
@@ -108,6 +109,23 @@ static constexpr float GAZE_Y_BIAS_DEFAULT = 1.26f;
 // for a bench rig where a fast wander-resume is what you actually want to watch.)
 static constexpr unsigned long PS_LOST_MS_DEFAULT = 3000;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Eye appearance sets (CG-S15)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// How long each eye set is shown before auto-rotating to the next one, and
+// whether rotation runs at all. Both are runtime values retunable over serial
+// with the `EYE:` protocol (main.cpp) -- deliberately a SEPARATE command
+// namespace from `PS_CFG:`, because PS_CFG is IRIS-verbatim and adding keys to
+// it would break the diffability this repo exists to preserve.
+//   EYE:AUTO=0/1   stop/start rotation
+//   EYE:MS=n       change the interval
+//   EYE:next       advance immediately
+//   EYE:<name>     select by name, and turn rotation off
+//   EYE?           list sets, show current + rotation state
+static constexpr uint32_t EYE_ROTATE_MS_DEFAULT  = 20000;
+static constexpr bool     EYE_AUTO_ROTATE_DEFAULT = true;
+
 // One-time bench calibration logging. When 1, the per-face serial line also
 // prints raw sensor register values (rawX/rawY/rawScore) so the operator can
 // read the true max Y (confirm NATIVE_H 480 vs 640) and raw score vs the
@@ -135,8 +153,17 @@ static constexpr unsigned long PS_LOST_MS_DEFAULT = 3000;
 
 #ifdef DUAL_EYE
 
-std::array<std::array<EyeDefinition, 2>, 1> eyeDefinitions{{
+// Eye sets. Outer index = set (rotation/EYE:next order), inner = per-display.
+// Both displays get the same look. The set NAME is read back out of
+// EyeDefinition::name (eyes.h), so there is no parallel name table to drift.
+// Adding a set: copy its header from TeensyEyes plus whichever
+// polarDist_240_<radius>_<irisRadius>_0 table it includes, add the include
+// above, and add a row here. All sets must share polar.mapRadius (240 here):
+// the gaze state in EyeController is stored in mapRadius units and is NOT
+// rescaled across a definition swap.
+std::array<std::array<EyeDefinition, 2>, 2> eyeDefinitions{{
     {nordicBlue::eye, nordicBlue::eye},
+    {hazel::eye, hazel::eye},
 }};
 
 // Both on SPI0 (MOSI=11, SCK=13), separate CS. mirror flags match IRIS
@@ -165,8 +192,12 @@ void initEyes(bool autoMove, bool autoBlink, bool autoPupils) {
 
 #else  // single eye (default)
 
-std::array<std::array<EyeDefinition, 1>, 1> eyeDefinitions{{
+// Eye sets. Outer index = set (rotation/EYE:next order). See the DUAL_EYE
+// branch above for the notes on adding one; all sets must share
+// polar.mapRadius (240) because the gaze state is not rescaled on a swap.
+std::array<std::array<EyeDefinition, 1>, 2> eyeDefinitions{{
     {nordicBlue::eye},
+    {hazel::eye},
 }};
 
 // CS=10 DC=2 MOSI=11 SCK=13 RST=3  rotation=0 mirror=true useFrameBuffer=true asyncUpdates=false
