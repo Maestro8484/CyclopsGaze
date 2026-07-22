@@ -351,7 +351,7 @@ Portability audit, measured against live source this session:
 - **Latent bug found, not introduced by the port.** That 2-second bare spin at `.cpp:84` has no
   yield: harmless on bare-metal Teensy, but under FreeRTOS on an S3 it starves the idle task and
   risks a task-watchdog reset. The portable fix (delay-based wait) is correct on both platforms.
-  ⚠ **IRIS runs this same code on its T4.1** — flagged for IRIS, not edited (read-only from here).
+  ⚠ **IRIS runs this same code on its T4.1.** Flagged for IRIS, not edited (read-only from here).
 
 BOM, prices fetched from vendor pages this session (not recalled):
 - Teensy 4.1 **$31.50** (SparkFun, in stock); DFRobot SEN0626 **$14.90**;
@@ -368,7 +368,7 @@ allocation is LUTs → internal SRAM, framebuffers → PSRAM, which is why an R8
 That allocation is **arithmetic, not observation**, and may not fit; a fallback is documented.
 
 - Recommendation: **buy nothing yet.** Prove it with a throwaway frame-rate spike on the N16R8
-  already on hand — real tables, real inner loop, no abstractions — gated at ≥20 FPS single-eye.
+  already on hand (real tables, real inner loop, no abstractions), gated at ≥20 FPS single-eye.
   A day's work that answers the only unknowable question before any refactoring is committed to.
 - Status: REPO-ONLY, docs only. Nothing built for S3, nothing flashed, no frame rate observed.
   Re-running docs/BENCH_PROTOCOL.md on the Teensy remains the standing #1 priority and is

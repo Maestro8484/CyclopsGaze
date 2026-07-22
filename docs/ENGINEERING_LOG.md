@@ -594,17 +594,17 @@ Exploratory only. No source touched, `FIRMWARE_VERSION` unchanged at CG-S13. The
 **[ESP32_S3_MIGRATION.md](ESP32_S3_MIGRATION.md)**; recorded here are the findings that are facts
 about *this* codebase and outlive the migration question either way.
 
-### The render engine is not the Teensy-coupled part — the display driver is
+### The render engine is not the Teensy-coupled part, the display driver is
 
 Expectation going in was that 19k lines of TeensyEyes would be the blocker. Read against live
 source, it is not. `EyeController.h` was read in full (600 lines): pure C++ plus Arduino
 `millis()`/`random()`, no Teensy API anywhere. `eyes.h` is the same but for an ARM-only `-Wpsabi`
-pragma at line 5. The ~18k lines of LUT data are portable as written — `PROGMEM` is a no-op on
+pragma at line 5. The ~18k lines of LUT data are portable as written: `PROGMEM` is a no-op on
 both Teensy 4 and ESP32, and the code dereferences the tables directly rather than through
 `pgm_read_byte`, so the same source works on both.
 
 What *is* welded to the Teensy is `GC9A01A_t3n`. Its `library.json` advertises
-`"platforms": "*"` — that manifest is wrong. The header is gated on `__IMXRT1062__` /
+`"platforms": "*"`. That manifest is wrong. The header is gated on `__IMXRT1062__` /
 `__IMXRT1052__` / `KINETISK`, includes Teensy's `DMAChannel.h`, and manipulates `IMXRT_LPSPI_t`
 and `KINETISK_SPI_t` peripheral register structs directly (29 sites in the `.cpp`). It cannot be
 ported, only replaced.
@@ -612,17 +612,17 @@ ported, only replaced.
 That the swap is cheap is a property the repo already has and should keep: `displays/Display.h`
 is a 31-line CRTP base with exactly five methods (`drawPixel`, `drawFastVLine`, `drawText`,
 `update`, `isAvailable`), and `EyeController` is templated on it. Any backend that implements
-those five is a drop-in selected in `config.h`. Worth protecting in future edits — it is what
+those five is a drop-in selected in `config.h`. Worth protecting in future edits, it is what
 makes the render engine portable in practice and not just in principle.
 
 One dependency hides in that seam: `GC9A01A_Display.cpp:22` calls `updateChangedAreasOnly(true)`.
 Any replacement backend needs an equivalent or it pushes the full 115,200-byte buffer every
-frame — a hard ~21 FPS ceiling at 20 MHz SPI from bus time alone.
+frame, a hard ~21 FPS ceiling at 20 MHz SPI from bus time alone.
 
 ### Latent bug in the driver, exposed by the port question (applies to the Teensy build too)
 
 [`SEN0626Sensor.cpp:84`](../src/sensors/SEN0626Sensor.cpp#L84) waits out the sensor's AI-model
-boot with `while (millis() < BOOT_SETTLE_MS) {}` — a 2-second bare spin with no yield. On the
+boot with `while (millis() < BOOT_SETTLE_MS) {}`, a 2-second bare spin with no yield. On the
 bare-metal Teensy this is harmless and has never caused a problem. Under FreeRTOS on an ESP32-S3
 it starves the idle task and risks a task-watchdog reset. The fix (a `delay()`-based wait) is
 strictly correct on both platforms and costs nothing on Teensy.
@@ -630,7 +630,7 @@ strictly correct on both platforms and costs nothing on Teensy.
 ⚠ **IRIS runs this same driver on its own T4.1.** Harmless there today, same shape. Flagged for
 an IRIS session; not edited from here (IRIS is read-only from this repo).
 
-### Measured render-loop cost — the numbers, so they are not re-derived
+### Measured render-loop cost: the numbers, so they are not re-derived
 
 The inner loop ([EyeController.h:364-443](../src/eyes/EyeController.h#L364)) does **up to 5
 random-access table reads per pixel**, over up to 57,600 pixels/frame:
@@ -650,7 +650,7 @@ flash data.
 
 This is the whole migration risk in one place: on a 600 MHz M7 it is a solved problem and runs
 today; on a 240 MHz LX7 with ~351 KB of *random* access it is a cache-hit-rate question that no
-amount of code reading can answer. Hence the study's kill gate — spike the real loop over the
+amount of code reading can answer. Hence the study's kill gate: spike the real loop over the
 real tables and measure FPS *before* refactoring anything.
 
 ### BOM (prices fetched from vendor pages 2026-07-21, not recalled)
