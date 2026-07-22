@@ -630,38 +630,100 @@ strictly correct on both platforms and costs nothing on Teensy.
 ⚠ **IRIS runs this same driver on its own T4.1.** Harmless there today, same shape. Flagged for
 an IRIS session; not edited from here (IRIS is read-only from this repo).
 
+### The Teensy already runs the tables from flash. A premise was wrong.
+
+Recorded because it reversed this session's own conclusion. An earlier draft of
+ESP32_S3_MIGRATION.md asserted the lookup tables must be copied into internal SRAM on an S3,
+and derived a hard "only one eye design fits" limit from it. The premise, that the tables are
+RAM-resident today, was never checked. Checking it disproved it.
+
+`arm-none-eabi-size -A .pio/build/cyclopsgaze/firmware.elf`:
+
+```
+.text.progmem     352136   1610622324     <- 0x60002574, external QSPI flash
+.data               9920    536870912     <- 0x20000000, DTCM
+.bss                2240    536880832     <- DTCM
+.bss.dma           12416    538968064     <- 0x20200000, OCRAM
+```
+
+The bench-VERIFIED Teensy 4.1 build holds **only 12 KB of variables in RAM** and streams all
+352 KB of tables out of external QSPI flash through the FlexSPI cache, at random, five times
+per pixel. That is precisely the access pattern that was being treated as the S3's
+disqualifying risk. It is the normal operating mode of the board this project already trusts.
+
+Durable consequences: tables in flash is the baseline for any port, not a compromise. SRAM
+residency is an optimization the S3 has available and the Teensy does not. Eye-design count is
+bounded by flash, not RAM. PSRAM is not needed, since two 115,200-byte framebuffers fit inside
+512 KB of SRAM.
+
 ### Measured render-loop cost: the numbers, so they are not re-derived
 
-The inner loop ([EyeController.h:364-443](../src/eyes/EyeController.h#L364)) does **up to 5
-random-access table reads per pixel**, over up to 57,600 pixels/frame:
+Produced by replaying `renderEye()`'s exact address arithmetic
+([EyeController.h:326-445](../src/eyes/EyeController.h#L326)) over the real tables on the host,
+centred gaze, steady state. Simulation of the real pattern over real data. Not hardware.
 
-| Table | Bytes |
-|---|---|
-| `polarAngle_240[240*240]` | 57,600 |
-| `polarDist_240_125_69_0[240*240]` | 57,600 |
-| `disp_240_125[120*120]` | 14,400 |
-| `eyeIris[512*128]` uint16 | 131,072 |
-| `eyeSclera[600*75]` uint16 | 90,000 |
-| **total** | **≈351 KB** |
+- **43,312 pixels per frame** (the loop covers the eyelid aperture, not all 57,600).
+- **214,492 table reads per frame**, 4.95 per pixel.
+- `drawAll` costs the *same* table reads as steady state; the extra area is flat eyelid fill.
 
-Plus 115,200 B of framebuffer per eye (`useFrameBuffer=true`). These figures were counted from
-the declarations this session and are consistent with the CG-S2 build report's 361,032 bytes of
-flash data.
+| Table | Size | Unique bytes/frame | Fetched (32 B lines) | Waste |
+|---|---|---|---|---|
+| `disp_240_125` | 14,400 | 11,909 | 13,504 | 1.13x |
+| `polarAngle_240` | 57,600 | 11,757 | 37,184 | 3.16x |
+| `polarDist_240_125_69_0` | 57,600 | 11,559 | 35,552 | 3.08x |
+| `eyeSclera` | 90,000 | 41,508 | 60,736 | 1.46x |
+| `eyeIris` | 131,072 | 25,800 | 83,200 | 3.22x |
+| **total** | **350,672** | **102,533** | **230,176** | **2.24x** |
 
-This is the whole migration risk in one place: on a 600 MHz M7 it is a solved problem and runs
-today; on a 240 MHz LX7 with ~351 KB of *random* access it is a cache-hit-rate question that no
-amount of code reading can answer. Hence the study's kill gate: spike the real loop over the
-real tables and measure FPS *before* refactoring anything.
+The polar tables and iris texture are indexed with a 240-byte stride, so most of each fetched
+line is discarded. Per frame the render needs 100 KB and hauls 230 KB. Across 13 gaze
+positions x 3 pupil sizes, 79% of all table bytes are touched, so there is no small hot subset.
 
-### BOM (prices fetched from vendor pages 2026-07-21, not recalled)
+Cache simulation (LRU, set-associative, cold start): 64 KB/32 B/8-way misses 4.94%,
+32 KB/32 B/8-way 8.57%, 16 KB/32 B/4-way 26.02%. **64-byte lines are worse than 32-byte**
+(21.82% vs 8.57% at 32 KB) because the striding wastes the extra bytes and halves effective
+capacity. Line size is a build setting on the S3 and the instinctive "bigger is better" choice
+is the wrong one here. The 16 KB row is why RP2350/Pico 2 was rejected despite costing $5.
 
-Teensy 4.1 **$31.50** (SparkFun, in stock) · SEN0626 **$14.90** (DFRobot) · Waveshare
-ESP32-S3-DualEye-LCD-1.28, ESP32-S3R8 + 8 MB PSRAM + 16 MB flash + **two** onboard 240×240 GC9A01
-round panels, **~$16-18**. Dual-eye build ~$65-68 → ~$31-33.
+Plus 115,200 B of framebuffer per eye (`useFrameBuffer=true`). Table sizes are consistent with
+the CG-S2 build report's flash-data figure.
 
-The objection worth recording as *checked and rejected*: "the AI camera dominates the BOM, so the
-MCU is the wrong lever." At $14.90 the SEN0626 does not dominate. The $31.50 Teensy is the single
-largest line item, so the MCU is in fact the right lever for a cost-driven change.
+**Still unmeasured, and it is the gap that matters: nobody has ever recorded this project's
+frame rate on any board.** `SHOW_FPS` sits commented out at `src/displays/Display.h:5`. Until
+that number exists there is no baseline for any port to be judged against.
+
+### BOM and board selection (prices fetched from vendor pages 2026-07-21, not recalled)
+
+Full sourced list is now **[BOM.md](BOM.md)**. Findings worth keeping here:
+
+Board choice is **ESP32-S3-DevKitC-1-N8R8, $15.00, 704 in stock at DigiKey**, selected on
+cache size (the deciding spec per the table above). Order the plain `-1`; the `-1U` variant
+showed zero stock and an 8 week lead, and the no-PSRAM `-N8` is discontinued so `-N8R8` is the
+part whether or not the PSRAM is used. Rejected Raspberry Pi Pico 2 despite $5 and superb
+availability: RP2350's XIP cache is 16 KB, the 26%-miss row, and 350 KB of tables plus two
+framebuffers is 580 KB against 520 KB so SRAM cannot rescue it. Rejected ESP32-P4 (768 KB
+SRAM, 400 MHz, which would erase every constraint) on toolchain maturity, since Arduino
+support was still beta as of April 2026 with no official PlatformIO support, and an unofficial
+toolchain fork is a worse tax than tight memory for a project whose deliverable is public
+replicability. Also withdrew an earlier same-session recommendation of the Waveshare DualEye
+integrated board: bundling two panels into the board price only wins if you do not already own
+panels.
+
+Two objections recorded as *checked*, one rejected and one upheld:
+- **Rejected:** "the AI camera dominates the BOM, so the MCU is the wrong lever." At $14.90
+  the SEN0626 does not dominate, and the Teensy at $31.50 was the largest line item.
+- **Upheld, and it emerged only after pricing domestic sources:** once you source
+  domestically, **the display dominates, not the MCU.** Two Adafruit 6178 panels are $35.00
+  against $29.90 for board plus camera. Display sourcing is a bigger cost lever than the
+  entire MCU decision, and the MCU swap saves $16.50 against a Teensy 4.1, roughly a quarter
+  of a two-eye build rather than half.
+
+Sourcing note for anyone republishing the BOM: **DigiKey cannot complete the cart.** Their
+only 1.28in round GC9A01A listing is the Adafruit 6178 (`1528-6178-ND`), marked obsolete and
+unstocked, so a domestic build is two vendors. Also note DigiKey's "obsolete" flag means "we
+stopped carrying it," not "it is discontinued": the 6178 is marked obsolete there while
+Adafruit have it in stock, same as the `-N8` devkit while `-N8R8` shows 704 units. Check the
+manufacturer before believing a distributor's end-of-life flag.
 
 ### Status
 

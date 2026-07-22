@@ -1,250 +1,270 @@
 # ESP32-S3 Migration: Feasibility Study
 
-**Status: REPO-ONLY / PLANNING.** Nothing in this document has been built, flashed, or measured.
-Every performance figure below is arithmetic or vendor spec, explicitly labeled as such. The one
-number that decides the whole thing, achieved frame rate, is **unknown and unknowable without a
-build**, and § 6 exists to get it cheaply before any refactoring is committed to.
+**Status: REPO-ONLY / PLANNING.** Nothing here has been built, flashed, or run. No ESP32-S3
+hardware has executed a line of this code. Figures below are either measured on the host
+(simulation over the real data, or the linked Teensy binary) or vendor spec, and each is
+labeled. The one number that decides the migration, achieved frame rate, is **unknown**, and
+§ 6 exists to get it cheaply before any refactoring starts.
 
-Session: CG-S14 (2026-07-21). Driver: **BOM / public replicability** (operator, this session).
+Session: CG-S14 (2026-07-21). Driver: **BOM cost and public replicability**.
+
+Parts, vendors and build totals live in **[BOM.md](BOM.md)**. This document is the engineering
+case, not the shopping list.
 
 ---
 
 ## 1. Why this is being considered
 
-CyclopsGaze exists so the IRIS gaze path is publicly replicable after the Useful Sensors Person
-Sensor was discontinued (see [CLAUDE.md](../CLAUDE.md), [README.md](../README.md)). Replicability has
-a price ceiling as well as a sourcing one. The Teensy 4.1 is the single most expensive line item in
-the current BOM, and it is not the part doing the hard work: the SEN0626 does its own inference.
+CyclopsGaze exists so the IRIS gaze path stays publicly replicable after the Useful Sensors
+Person Sensor was discontinued. Replicability has a price ceiling and a sourcing one. The
+Teensy is the most expensive part in the build, it is single-sourced from PJRC, and it is not
+the part doing the hard work since the SEN0626 runs its own inference.
 
-This is **not** a response to any fault. Standalone tracking was bench-VERIFIED at CG-S8 and the
-driver is live in IRIS. Nothing here changes that.
+This is **not** a response to any fault. Standalone tracking was bench-VERIFIED at CG-S8 and
+the driver is live in IRIS.
 
 ### This does not contradict the CG-S3 tombstone. Read that entry carefully.
 
 [CHANGELOG.md](../CHANGELOG.md) CG-S3 Part A records that "the old ESP32-S3 + OV2640 approach
-(`../OGLE`) was tombstoned/archived ... research favors T4.1 + SEN0626." A future session will hit
-that line and this document and think one of them is wrong. Neither is. They are about different
-machines doing different work:
+(`../OGLE`) was tombstoned/archived ... research favors T4.1 + SEN0626." A future session will
+hit that and this document and think one is wrong. Neither is. Different machines, different
+work:
 
 | | OGLE (retired) | This study |
 |---|---|---|
-| What runs the face detection | **The ESP32-S3 itself** (OV2640 + on-chip esp-dl inference) | **The SEN0626**, on its own AI processor |
-| The S3's job | Camera driver + neural network + tracking + link | Read 4 Modbus registers at ~6.7 Hz; draw eyes |
-| Why it failed / whether that applies | Never reached reliable tracking at IRIS's real bench distance and lighting | **Does not apply.** That workload is gone. |
+| What runs face detection | **The ESP32-S3 itself** (OV2640 + on-chip esp-dl inference) | **The SEN0626**, on its own AI processor |
+| The S3's job | Camera driver + neural net + tracking + link | Read 4 Modbus registers at ~6.7 Hz; draw eyes |
+| Does the retirement apply | Failed at IRIS's real bench distance and lighting | **No.** That workload does not exist here. |
 
-OGLE was retired because **on-chip vision on an S3 was not good enough**. This proposal asks the S3
-to do no vision at all: the SEN0626 does its own inference and reports a face center, exactly as it
-does for the Teensy today. The retired verdict is about a workload this design does not have.
+OGLE was retired because on-chip vision on an S3 was not good enough. This proposal gives the
+S3 no vision workload at all. What is new and unproven here is the render load, which OGLE
+never carried since it fed gaze to a separate Teensy and drew nothing.
 
-What *is* new and unproven here is the render load (§ 5), which OGLE never carried. OGLE fed gaze to
-a separate Teensy over USB-CDC and drew nothing. So the risk profile is not merely different from
-OGLE's, it is close to disjoint.
+## 2. The correction that reshaped this study
 
-## 2. BOM comparison
+**An earlier draft of this document claimed the lookup tables must be copied into internal
+SRAM, and derived a hard "one eye design only" limit from that. Both were wrong.** The premise
+was never checked. It has now been checked and it is false.
 
-Prices verified 2026-07-21 by fetching the vendor pages this session. Not recalled.
+Reading the linked Teensy binary (`arm-none-eabi-size -A firmware.elf`):
 
-| Line | Current (T4.1) | Proposed (S3 DualEye) |
-|---|---|---|
-| MCU | Teensy 4.1, **$31.50** (SparkFun, in stock) | |
-| Display(s) | 1x GC9A01A module, price not verified this session (~$8-12 typical) | |
-| MCU + 2 displays, integrated | | ESP32-S3-DualEye-LCD-1.28, **~$16-18** |
-| Sensor | DFRobot SEN0626, **$14.90** | DFRobot SEN0626, **$14.90** |
-| **Single-eye total** | **~$55-58** | **~$31-33** (and the second eye comes anyway) |
-| **Dual-eye total** | **~$65-68** | **~$31-33** |
+```
+.text.progmem     352136   1610622324     <- 0x60002574, external QSPI flash
+.data               9920    536870912     <- 0x20000000, DTCM
+.bss                2240    536880832     <- DTCM
+.bss.dma           12416    538968064     <- 0x20200000, OCRAM
+```
 
-The dual-eye comparison is the honest one, because IRIS has two eyes and the integrated board has two
-displays whether you use them or not. On that basis the S3 path is **roughly half the BOM**.
+**The Teensy 4.1 already runs all 352 KB of lookup tables directly out of external QSPI flash
+through its cache**, with only 12 KB of variables in RAM. The bench-VERIFIED build does
+exactly the thing that was being treated as the S3's disqualifying risk. It is not a
+categorical problem, it is the normal operating mode of the board this project already trusts.
 
-A premise worth recording as *checked and rejected*: before pricing this, the obvious objection was
-"the AI camera dominates the BOM, so the MCU is the wrong lever." At **$14.90** the SEN0626 does not
-dominate. The $31.50 Teensy does. The operator's instinct was right and the objection does not hold.
+Consequences:
+
+- Tables in flash is the **baseline**, not a compromise. The S3 does what the Teensy does.
+- SRAM residency is an **optimization the S3 has available and the Teensy does not**, to be
+  spent only if measurement says it is needed.
+- The "one eye design" limit is **void**. Two designs is 572 KB of flash against 8 or 16 MB.
+- **PSRAM is not required.** The two 115,200-byte framebuffers total 225 KB inside 512 KB of
+  SRAM. Buy PSRAM only because the no-PSRAM devkit is discontinued, not because this needs it.
 
 ## 3. Board recommendation
 
-### Most appropriate: **Waveshare ESP32-S3-DualEye-LCD-1.28**
+**ESP32-S3-DevKitC-1-N8R8. $15.00, 704 in stock at DigiKey.**
 
-ESP32-S3R8 (Xtensa LX7 dual-core @ 240 MHz), 512 KB internal SRAM, **8 MB PSRAM**, 16 MB flash, and
-**two onboard 1.28in 240x240 GC9A01 round IPS panels**. ~$16-18.
+The deciding spec is **data cache size**, because this workload thrashes it (§ 5). The S3's
+data cache is configurable to 32 or 64 KB, which is the good end of the measured range.
 
-Why it is the right part specifically for this project, not just a cheap S3:
+Order the plain `-1`, not `-1U`; the external-antenna variant showed zero stock and an 8 week
+lead. The no-PSRAM `-N8` is discontinued, so `-N8R8` is the part regardless of § 2.
 
-- **It is the deliverable's shape.** Two round eyes driven by one MCU is exactly what CyclopsGaze's
-  existing `DUAL_EYE` mode builds and what IRIS is. No adapter, no carrier, no harness.
-- **It deletes the failure mode this repo actually keeps hitting.** Every bench failure in
-  [ENGINEERING_LOG.md](ENGINEERING_LOG.md) has been *wiring*, not code: the I2C/UART DIP switch
-  (CG-S4), and a bad connector sagging sensor VCC to 2.6 V (CG-S5). Replication instructions that say
-  "wire ten display pins correctly" are where third parties will fail. Integrated panels remove that
-  entire surface for the display half; only the 4-wire SEN0626 run is left to get wrong.
-- **The onboard display topology appears to match the code already written.** Waveshare's docs list
-  `LCD_CS2`, `LCD_RST2`, `LCD_BL2` alongside a single `LCD_DC`, i.e. shared SPI bus with per-panel CS,
-  which is precisely the topology [config.h:142](../src/config.h#L142) already implements for
-  `DUAL_EYE`, and for the same reason (a second SPI bus was not available). ⚠ **Exact GPIO numbers
-  were not obtainable from the vendor docs this session** and are bring-up task #1.
-- **The 8 MB PSRAM is load-bearing here**, for a specific reason. See § 5.
+On the replicability argument specifically: the ESP32-S3-WROOM-1-N8 module is $5.66 in ones
+and $3.84 in volume, second-sourced through dozens of devkit vendors, with mature Arduino and
+PlatformIO support. That is the opposite of the single-vendor PJRC situation, which is the
+actual complaint driving this study.
 
-### Cheapest viable: the **ESP32-S3-DevKitC-1 N16R8 you already own**
+### Rejected: Raspberry Pi Pico 2 / RP2350
 
-For the *prototype* the answer is the spare on your shelf: it is the same ESP32-S3R8 silicon and the
-same 8 MB PSRAM as the DualEye board. Everything in § 5 and § 6, the memory-allocation question and
-the frame-rate kill gate, which are the only two things that can sink this, can be answered on the
-N16R8 with a bare GC9A01A module wired up, at **zero additional spend**.
+Tempting at $5 and arguably the most replicable board in existence, but wrong for this
+workload. **RP2350's XIP cache is 16 KB**, which § 5's simulation puts at a 26% miss rate
+against 4.9 to 8.6% for the S3, so roughly 3 to 5x the flash stalls per frame. It also runs
+150 MHz against 240. And you cannot dodge it via SRAM: 350 KB of tables plus two 115 KB
+framebuffers is 580 KB against 520 KB available. Does not fit for two eyes.
 
-**Recommendation: prove it on the N16R8 you have, commit to the DualEye board only after § 6 passes.**
-Do not buy anything yet.
+### Rejected: ESP32-P4
+
+768 KB SRAM and 400 MHz would erase every constraint here, but Arduino support was still beta
+as of April 2026 with no official PlatformIO support, only a community fork. For a project
+whose deliverable is *someone else can build this*, an unofficial toolchain fork is a worse
+tax than a tight memory budget. Its round-display boards are also 720x720 and 800x800 MIPI
+panels, not 240x240 SPI, so the geometry tables would all need regenerating.
+
+### Rejected: integrated dual-round-display boards
+
+An earlier draft recommended the Waveshare ESP32-S3-DualEye-LCD-1.28. Withdrawn. It bundles
+two displays into the board price, which is only a win if you do not already own displays.
 
 ## 4. Portability audit
 
-Read this session against live source, not recalled.
+Read against live source. Line counts are actual.
 
 | Component | Lines | Verdict |
 |---|---|---|
-| `eyes/EyeController.h` | 600 | **Ports free.** Read in full: pure C++ + `millis()`/`random()`. No Teensy API. |
-| `eyes/eyes.h` | 213 | **Ports free**, minus the ARM-only `-Wpsabi` pragma at line 5 (guard it). |
-| `eyes/240x240/*` LUT data | ~18k | **Ports free.** `PROGMEM` is a no-op on both; code dereferences directly, not via `pgm_read_byte`. |
-| `displays/Display.h` | 31 | **Ports free.** This is the seam that makes the whole migration tractable. |
-| `displays/GC9A01A_Display.*` | 158 | **Rewrite** against a new backend. ~150 lines. |
-| `GC9A01A_t3n` (vendor lib) | | **Unportable, must be replaced.** See below. |
-| `sensors/SEN0626Sensor.*` | 285 | **3 blockers**, all listed below. Contract-sensitive, see § 7. |
-| `main.cpp` | 194 | **Minor**: `analogRead(A0)` seeding, USB-CDC-vs-UART0 boot behavior. |
+| `eyes/EyeController.h` | 600 | **Ports free.** Read in full: pure C++ plus `millis()`/`random()`. No Teensy API. |
+| `eyes/eyes.h` | 213 | **Ports free**, minus the ARM-only `-Wpsabi` pragma at line 5. Guard it. |
+| `eyes/240x240/*` table data | ~18k | **Ports free.** `PROGMEM` is a no-op on both; tables are dereferenced directly, not via `pgm_read_byte`. |
+| `displays/Display.h` | 31 | **Ports free.** The seam that makes this tractable. |
+| `displays/GC9A01A_Display.*` | 158 | **Rewrite** against a new backend, roughly 150 lines. |
+| `GC9A01A_t3n` (vendor lib) | | **Unportable, must be replaced.** |
+| `sensors/SEN0626Sensor.*` | 285 | **3 blockers**, below. Contract-sensitive, see § 7. |
+| `main.cpp` | 194 | **Minor**: `analogRead(A0)` seeding, USB-CDC versus UART0 boot behavior. |
 
 ### The display library cannot be ported
 
-`GC9A01A_t3n`'s `library.json` advertises `"platforms": "*"`. That is false. The header is gated on
-`__IMXRT1062__` / `__IMXRT1052__` / `KINETISK`, includes Teensy's `DMAChannel.h`, and drives
-`IMXRT_LPSPI_t` / `KINETISK_SPI_t` peripheral register structs directly (29 such sites in the `.cpp`).
-Nothing survives on Xtensa.
+`GC9A01A_t3n`'s `library.json` advertises `"platforms": "*"`. That is false. The header is
+gated on `__IMXRT1062__` / `__IMXRT1052__` / `KINETISK`, includes Teensy's `DMAChannel.h`, and
+drives `IMXRT_LPSPI_t` / `KINETISK_SPI_t` peripheral registers directly (29 sites in the
+`.cpp`). Nothing survives on Xtensa.
 
-**Prior art, do not hand-roll:** LovyanGFX (best S3 story, with DMA and sprite/partial-update support)
-or TFT_eSPI. Both have GC9A01A support. A hand-written SPI driver would be inventing over a mature
-library for no reason.
+**Prior art, do not hand-roll:** LovyanGFX (best S3 story, DMA plus partial-update support) or
+TFT_eSPI. A hand-written SPI driver would be inventing over a mature library.
 
-**One feature must not be lost in the swap:** `GC9A01A_Display.cpp:22` calls
-`updateChangedAreasOnly(true)`. Without an equivalent, every frame pushes the full 115,200-byte
-buffer. At 20 MHz SPI that is a hard 21 FPS ceiling from the bus alone (~46 ms/frame); at 80 MHz it
-is ~11.5 ms, so an S3 at full SPI clock survives even the naive case, but only because the S3 clocks
-SPI faster, not because the cost went away.
+**One feature must survive the swap:** `GC9A01A_Display.cpp:22` calls
+`updateChangedAreasOnly(true)`. Without an equivalent, every frame pushes the full
+115,200-byte buffer, a hard 21 FPS ceiling at 20 MHz SPI from bus time alone.
 
 ### The three driver blockers
 
-- [`SEN0626Sensor.h:99`](../src/sensors/SEN0626Sensor.h#L99), `elapsedMillis` members. Teensy-core-only type.
-- [`SEN0626Sensor.cpp:68`](../src/sensors/SEN0626Sensor.cpp#L68), `serial.begin(testBaud)`. The S3 routes
-  UART through a pin matrix; needs `begin(baud, SERIAL_8N1, rx, tx)`.
-- [`SEN0626Sensor.cpp:84`](../src/sensors/SEN0626Sensor.cpp#L84), `while (millis() < BOOT_SETTLE_MS) {}`.
-  **A latent bug the port exposes rather than causes.** A 2-second bare spin with no yield is fine on
-  bare-metal Teensy; under FreeRTOS on the S3 it starves the idle task and risks a task-watchdog reset
-  during the sensor's AI-model boot wait. The portable fix (a `delay()`-based wait, which yields on
-  ESP32 and is equivalent on Teensy) is correct on **both** platforms.
-  → **This one is worth flagging upstream to IRIS**, which runs the same code on a T4.1 today. It is
-  harmless there, but it is the same latent shape. IRIS is READ-ONLY from here: flag, do not edit.
+- [`SEN0626Sensor.h:99`](../src/sensors/SEN0626Sensor.h#L99), `elapsedMillis` members.
+  Teensy-core-only type.
+- [`SEN0626Sensor.cpp:68`](../src/sensors/SEN0626Sensor.cpp#L68), `serial.begin(testBaud)`.
+  The S3 routes UART through a pin matrix and needs `begin(baud, SERIAL_8N1, rx, tx)`.
+- [`SEN0626Sensor.cpp:84`](../src/sensors/SEN0626Sensor.cpp#L84),
+  `while (millis() < BOOT_SETTLE_MS) {}`. **A latent bug the port exposes rather than causes.**
+  A 2-second bare spin with no yield is fine on bare-metal Teensy; under FreeRTOS on the S3 it
+  starves the idle task and risks a task-watchdog reset during the sensor's AI boot wait,
+  presenting as a boot loop before the eye ever draws. The portable fix (a `delay()`-based
+  wait, which yields on ESP32 and is equivalent on Teensy) is correct on **both** platforms.
+  → Worth flagging upstream to IRIS, which runs the same code on a T4.1. Harmless there, same
+  shape. IRIS is read-only from here: flag, do not edit.
 
-## 5. The memory architecture, the actual engineering problem
+## 5. Measured render cost
 
-The render inner loop ([EyeController.h:364-443](../src/eyes/EyeController.h#L364)) performs **up to 5
-random-access table reads per pixel**, over up to 57,600 pixels per frame:
+Numbers below come from replaying `renderEye()`'s exact address arithmetic
+([EyeController.h:326-445](../src/eyes/EyeController.h#L326)) over the real tables on the host,
+at centred gaze in steady state. Simulation of the real access pattern over real data, not an
+estimate. Not a hardware measurement either.
 
-| Table | Size | Access |
+- **43,312 pixels drawn per frame** (not the full 57,600; the loop covers the eyelid aperture).
+- **214,492 table reads per frame**, 4.95 per pixel.
+- `drawAll` costs the **same** table reads as steady state. The extra area is flat eyelid fill.
+
+Where the reads go, and how efficiently:
+
+| Table | Size | Unique bytes used/frame | Fetched as 32 B lines | Waste |
+|---|---|---|---|---|
+| `disp_240_125` | 14,400 | 11,909 | 13,504 | 1.13x |
+| `polarAngle_240` | 57,600 | 11,757 | 37,184 | **3.16x** |
+| `polarDist_240_125_69_0` | 57,600 | 11,559 | 35,552 | **3.08x** |
+| `eyeSclera` | 90,000 | 41,508 | 60,736 | 1.46x |
+| `eyeIris` | 131,072 | 25,800 | 83,200 | **3.22x** |
+| **total** | **350,672** | **102,533** | **230,176** | **2.24x** |
+
+The polar tables and the iris texture are indexed with a stride of 240 bytes, so most of every
+fetched cache line is discarded. Per frame the render **needs 100 KB and hauls 230 KB**.
+
+Cache simulation (LRU, set-associative, single frame, cold start):
+
+| Geometry | Miss rate | Misses/frame |
 |---|---|---|
-| `polarAngle_240[240*240]` | 57,600 B | random per pixel |
-| `polarDist_240_125_69_0[240*240]` | 57,600 B | random per pixel |
-| `disp_240_125[120*120]` | 14,400 B | 2 reads per pixel |
-| `eyeIris[512*128]` uint16 | 131,072 B | random per pixel (iris band) |
-| `eyeSclera[600*75]` uint16 | 90,000 B | random per pixel (sclera band) |
-| **Total** | **~351 KB** | |
+| 16 KB / 32 B / 4-way | 26.02% | 55,804 |
+| 32 KB / 32 B / 8-way | 8.57% | 18,376 |
+| 32 KB / 64 B / 8-way | 21.82% | 46,806 |
+| 64 KB / 32 B / 8-way | **4.94%** | 10,594 |
+| 64 KB / 64 B / 8-way | 5.35% | 11,479 |
 
-Plus a 240x240x16bpp framebuffer = **115,200 B per eye**.
+**Counterintuitive and actionable: 64-byte lines are worse than 32-byte at 32 KB**, 21.8%
+against 8.6%, because the striding wastes the extra bytes and halves effective capacity. The
+S3's line size is a build setting, and the instinctive "bigger is better" choice is the wrong
+one here. Configure 32 B lines and the largest cache available.
 
-On the Teensy 4.1 (600 MHz M7, generous cache) this is a solved problem. It is running today. On the
-S3 (240 MHz LX7) the tables would default to flash `.rodata` behind the MMU cache, and ~351 KB of
-*random* access against a cache measured in tens of KB is the single biggest risk in this migration.
+Across a sweep of 13 gaze positions and 3 pupil sizes, **79% of all table bytes get touched**
+(269 KB of 342 KB). There is no small hot subset, so selective caching or partial SRAM
+residency buys little. It is all-in or all-out.
 
-**The allocation that makes it work (arithmetic, NOT measured):**
-
-- LUTs + textures (~342 KB) → **copy into internal SRAM at boot**. 512 KB internal is the only fast
-  memory on the part, and this is the data that needs it.
-- Framebuffers (2 x 115,200 = 225 KB) → **PSRAM**. Sequential, DMA'd out to the panels, which is the
-  access pattern PSRAM is actually good at.
-
-This is exactly why the recommendation is an **R8 part and not a bare N8/no-PSRAM devkit**: PSRAM does
-not fix the LUT problem (it is off-chip and cached through the same path, so putting LUTs there could
-be *worse* than flash), but it frees the internal SRAM that does.
-
-⚠ **The tight part:** 342 KB of 512 KB leaves ~170 KB for stack, heap, and the Arduino/IDF core, and
-not all 512 KB is available to the application. This may not fit. **Fallback if it doesn't:** keep the
-two large textures (221 KB) in flash, since their access has real spatial locality (`tx` tracks angle
-and `ty` tracks distance, so adjacent pixels frequently hit adjacent texels) and put only the three
-small hot LUTs (129,600 B) in SRAM. That is a comfortable fit.
-
-**Upside not available on Teensy:** the S3 is dual-core. `renderFrame()` currently renders one eye per
-call and alternates. Both eyes could render concurrently, pinned per core, with sensor/serial on the
-other. That could recover a meaningful share of the 600 → 240 MHz gap. Option, not plan.
+The reproduction script is not committed; it parses the tables out of `src/eyes/240x240/` and
+replays the loop. Regenerate it if these numbers ever need re-deriving.
 
 ## 6. The kill gate. Do this before anything else.
 
-**Do not port the project and then discover the frame rate.** The whole migration hinges on one number
-nobody can reason to. Build a throwaway spike first:
+**Do not port the project and then discover the frame rate.** Two measurements, in order,
+neither needing a new board.
 
-1. N16R8 + any GC9A01A module (hardware you already own).
-2. Link in the **real** `polarAngle_240`, `polarDist_240_125_69_0`, `disp_240_125`, `eyeIris`,
-   `eyeSclera` tables, unmodified, from this repo.
-3. Run the **real** `renderEye()` inner loop over a full 240x240 frame with the real access pattern.
-   No sensor, no eyelids, no blink logic, no Display abstraction. Just the loop and the tables.
-4. Time it. Report frames/sec three ways: tables in flash; tables in SRAM; tables in PSRAM.
+1. **Uncomment `SHOW_FPS` at `src/displays/Display.h:5`, flash the Teensy, record the number.**
+   One line, one flash. *Nobody has ever measured this project's frame rate on any board*, so
+   there is currently no baseline for "fast enough" to mean anything against. Cheapest
+   high-value measurement available.
+2. **Run the real inner loop over the real tables on an S3, record the number.** No sensor, no
+   eyelids, no Display abstraction. Report it three ways: tables in flash, tables in SRAM,
+   32 B versus 64 B cache lines.
 
-That is perhaps a day's work, it answers the only question that matters, and it is cheap to be wrong
-about. If it comes back at 25+ FPS the migration is a straightforward exercise. If it comes back in
-single digits, the answer is to stop, and that is a *good* outcome for a day spent.
-
-**Gate: >=20 FPS single-eye in the spike, or the migration does not proceed as scoped.**
+**Gate: within a factor of two of the Teensy baseline, or reconsider.** If it misses badly the
+honest answer is Teensy 4.0 at $23.80, which is a real cost reduction with zero port risk.
 
 ## 7. The drop-in contract, the thing most at risk
 
-`SEN0626Sensor.{h,cpp}` exists to be byte-identical to IRIS's copy. CG-S13 verified that by diff.
-Every one of § 4's three blockers requires editing that file, and drift is precisely what this repo
-exists to prevent.
+`SEN0626Sensor.{h,cpp}` exists to be byte-identical to IRIS's copy; CG-S13 verified that by
+diff. All three § 4 blockers require editing that file, and drift is what this repo exists to
+prevent.
 
-**Do not fork the driver.** Two divergent copies would destroy the property the repo is built on.
+**Do not fork the driver.** Two divergent copies destroy the property the repo is built on.
 
-**Recommended:** a small `src/platform.h` shim providing `elapsedMillis` on non-Teensy targets and one
-`SEN0626_SERIAL_BEGIN(...)` macro. The driver body then stays *visually identical* to IRIS's, and the
-entire platform delta is confined to one new file plus an `#include`. Prior art for the first half:
-the standalone `elapsedMillis` library on the PlatformIO registry. Do not re-implement it. (⚠ confirm
-it builds for Xtensa; not verified this session.)
+**Recommended:** a small `src/platform.h` shim providing `elapsedMillis` on non-Teensy targets
+plus one `SEN0626_SERIAL_BEGIN(...)` macro. The driver body then stays visually identical to
+IRIS's and the whole platform delta sits in one new file plus an include. Prior art for the
+first half is the standalone `elapsedMillis` library on the PlatformIO registry; do not
+reimplement it. (⚠ confirm it builds for Xtensa, not verified.)
 
-**Second-order consequence to decide deliberately, not by accident:** if the standalone bench moves to
-S3 while IRIS stays a Teensy 4.1, the bench no longer validates on the same silicon as the deploy
-target. That property is a real part of why CG-S8's VERIFIED status meant something. Either accept it
-explicitly, or keep a Teensy build target alive in `platformio.ini` as the contract reference. The
-second is cheap (`[env:cyclopsgaze]` stays, `[env:cyclopsgaze_s3]` is added) and is recommended.
+**Decide deliberately:** if the bench moves to S3 while IRIS stays a Teensy 4.1, the bench no
+longer validates on the same silicon as the deploy target, which is part of why CG-S8's
+VERIFIED status meant something. Keep a Teensy build target alive in `platformio.ini` as the
+contract reference. `[env:cyclopsgaze]` stays, `[env:cyclopsgaze_s3]` is added.
 
 ## 8. Staged plan
 
 | Stage | Work | Gate |
 |---|---|---|
-| 0 | Frame-rate spike (§ 6) on the N16R8 you own | **>=20 FPS or stop** |
-| 1 | `platform.h` shim; driver builds for both targets; fix the § 4 busy-wait | Teensy build byte-identical in behavior; `diff` vs IRIS still clean |
-| 2 | Headless S3 build: sensor + `PS_CFG` + serial logging, no rendering | `[CG]` lines and `PS_CFG?` readback correct on S3 |
+| 0 | Teensy FPS baseline, then the S3 render spike (§ 6) | within 2x of baseline, or stop |
+| 1 | `platform.h` shim; driver builds both targets; fix the § 4 busy-wait | Teensy behavior unchanged; `diff` vs IRIS still clean |
+| 2 | Headless S3 build: sensor + `PS_CFG` + serial logging, no rendering | `[CG]` lines and `PS_CFG?` correct on S3 |
 | 3 | New `Display` backend on LovyanGFX behind the existing CRTP seam | Single eye renders and tracks |
-| 4 | Memory allocation per § 5; dual-eye; DualEye board bring-up | Full BENCH_PROTOCOL.md re-run |
+| 4 | Dual-eye, one eye per core | Full BENCH_PROTOCOL.md re-run, including step 10 |
 
-Stage 2 has standalone value regardless of whether stages 3-4 ever happen: it would let the
-outstanding CG-S12/CG-S13 verification work (raw-score gate, per-axis gain/bias, `PS_CFG` parser,
-facing gate, all still UNVERIFIED) run on an S3 while the Teensy bench hardware is unavailable, since
-every one of those is observable from the serial lines alone with no eye rendering involved.
+Stage 2 has standalone value even if 3 and 4 never happen: it would let the outstanding
+CG-S12/CG-S13 verification work (raw-score gate, per-axis gain/bias, `PS_CFG` parser, facing
+gate, all still UNVERIFIED) run on an S3 while Teensy bench hardware is unavailable, since all
+of it is observable from the serial lines with no rendering involved.
+
+Note for stage 4: the S3 is dual-core and `renderFrame()` currently renders one eye per call
+and alternates, so two eyes each run at half rate. One eye per core would claw back most of
+the clock deficit exactly where two eyes need it. Reasoning, not measurement.
 
 ## 9. Open questions
 
-- Exact GPIO map for the DualEye board's two panels. Not obtainable from vendor docs this session.
-- Whether ~342 KB of static tables actually fits alongside the Arduino/IDF core in 512 KB SRAM.
+- Frame rate on Teensy (never measured) and on S3 (never built). Everything else is bounded.
 - Whether the `elapsedMillis` registry library builds for Xtensa.
-- Whether `HardwareSerial::flush()` on ESP32 blocks until TX-complete. Modbus RTU framing in
+- Whether `HardwareSerial::flush()` on ESP32 blocks until TX-complete. Modbus RTU framing at
   [`SEN0626Sensor.cpp:41`](../src/sensors/SEN0626Sensor.cpp#L41) depends on that semantic.
-- Bare GC9A01A module price, for an accurate non-integrated comparison.
+- Whether the S3 devkit's onboard 3.3V regulator has headroom for the SEN0626 under render
+  load. It is smaller than the Teensy's, and CG-S5 was a sensor-undervolt failure.
 
 ## Sources
 
-- [SparkFun Teensy 4.1](https://www.sparkfun.com/teensy-4-1.html), $31.50, in stock
-- [DFRobot SEN0626](https://www.dfrobot.com/product-2914.html), $14.90
-- [Waveshare ESP32-S3-DualEye-LCD-1.28](https://www.waveshare.com/esp32-s3-dualeye-touch-lcd-1.28.htm)
-- [ESP32-S3-DualEye-Touch-LCD-1.28 docs](https://docs.waveshare.com/ESP32-S3-DualEye-Touch-LCD-1.28)
-- [Waveshare ESP32-S3-LCD-1.28](https://www.waveshare.com/esp32-s3-lcd-1.28.htm), single-panel sibling
+Prices and stock verified 2026-07-21 by fetching vendor pages. See [BOM.md](BOM.md).
+
+- [DigiKey ESP32-S3-DevKitC-1-N8R8](https://www.digikey.com/en/products/detail/espressif-systems/ESP32-S3-DEVKITC-1-N8R8/15295894), $15.00, 704 in stock
+- [DigiKey DFRobot SEN0626](https://www.digikey.com/en/products/detail/dfrobot/SEN0626/27526995), $14.90, 41 in stock
+- [SparkFun Teensy 4.0](https://www.sparkfun.com/teensy-4-0.html) $23.80 / [Teensy 4.1](https://www.sparkfun.com/teensy-4-1.html) $31.50
+- [Adafruit 6178 round GC9A01A](https://www.adafruit.com/product/6178), $17.50
+- [Raspberry Pi Pico 2](https://www.raspberrypi.com/news/raspberry-pi-pico-2-our-new-5-microcontroller-board-on-sale-now/), $5, RP2350 with 16 KB XIP cache

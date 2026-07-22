@@ -353,23 +353,52 @@ Portability audit, measured against live source this session:
   risks a task-watchdog reset. The portable fix (delay-based wait) is correct on both platforms.
   ⚠ **IRIS runs this same code on its T4.1.** Flagged for IRIS, not edited (read-only from here).
 
-BOM, prices fetched from vendor pages this session (not recalled):
-- Teensy 4.1 **$31.50** (SparkFun, in stock); DFRobot SEN0626 **$14.90**;
-  Waveshare ESP32-S3-DualEye-LCD-1.28 (ESP32-S3R8, 8 MB PSRAM, 16 MB flash, **two** onboard
-  240×240 GC9A01 round panels) **~$16-18**.
-- Dual-eye build: **~$65-68 → ~$31-33**, roughly half, with all display wiring eliminated.
-- A premise checked and rejected: "the AI camera dominates the BOM so the MCU is the wrong
-  lever" is false at $14.90. The $31.50 Teensy is the biggest line item.
+**A premise was checked and found false, which reshaped the study.** An earlier draft this
+session claimed the lookup tables must be copied into internal SRAM on the S3, and derived a
+hard "one eye design only" limit from it. Reading the linked Teensy binary
+(`arm-none-eabi-size -A`) disproved it: `.text.progmem` is 352,136 bytes at 0x60002574, which
+is external QSPI flash, with only `.data` 9,920 and `.bss` 2,240 in RAM. **The bench-VERIFIED
+Teensy build already streams all 352 KB of tables out of flash through its cache.** So tables
+in flash is the baseline, SRAM residency is an optimization the S3 has and the Teensy does
+not, the one-design limit is void, and PSRAM is not required (two framebuffers are 225 KB
+inside 512 KB of SRAM).
 
-The measured render-loop numbers that decide the migration: up to **5 random-access table reads
-per pixel** over **≈351 KB** of LUTs and textures (polarAngle 57,600 + polarDist 57,600 + disp
-14,400 + iris 131,072 + sclera 90,000), plus a 115,200-byte framebuffer per eye. Proposed
-allocation is LUTs → internal SRAM, framebuffers → PSRAM, which is why an R8 part is specified.
-That allocation is **arithmetic, not observation**, and may not fit; a fallback is documented.
+Render cost measured by replaying `renderEye()`'s exact address arithmetic over the real
+tables on the host (simulation of the real pattern over real data, not hardware):
+- **43,312 pixels and 214,492 table reads per frame**, 4.95 reads per pixel.
+- Per frame the render **needs 100 KB of unique bytes but fetches 230 KB**, a 2.24x
+  amplification. The polar tables and iris texture stride 240 bytes and waste ~3.1x.
+- Across a sweep of gaze positions and pupil sizes **79% of all table bytes get touched**, so
+  there is no small hot subset and selective residency buys little.
+- Cache simulation: 64 KB/32 B/8-way misses 4.94%, 32 KB/32 B 8.57%, 16 KB/4-way 26.02%.
+  **64-byte lines are worse than 32-byte** (21.8% vs 8.6% at 32 KB) because the striding
+  wastes the extra bytes. The S3's line size is a build setting and the instinctive choice is
+  the wrong one.
 
-- Recommendation: **buy nothing yet.** Prove it with a throwaway frame-rate spike on the N16R8
-  already on hand (real tables, real inner loop, no abstractions), gated at ≥20 FPS single-eye.
-  A day's work that answers the only unknowable question before any refactoring is committed to.
-- Status: REPO-ONLY, docs only. Nothing built for S3, nothing flashed, no frame rate observed.
-  Re-running docs/BENCH_PROTOCOL.md on the Teensy remains the standing #1 priority and is
-  unaffected by this study.
+Board recommendation, revised: **bare ESP32-S3-DevKitC-1-N8R8, $15.00, 704 in stock at
+DigiKey.** Cache size is the deciding spec and the S3's is configurable to 32/64 KB. Rejected
+Raspberry Pi Pico 2 despite $5: RP2350's XIP cache is 16 KB, the 26% row, and 350 KB of tables
+plus two framebuffers is 580 KB against 520 KB so SRAM cannot rescue it. Rejected ESP32-P4
+(768 KB SRAM, 400 MHz) on toolchain maturity: Arduino support still beta, no official
+PlatformIO, and its round boards are 720x720 MIPI rather than 240x240 SPI. Also withdrew this
+session's earlier recommendation of the Waveshare DualEye board, which only wins if you do not
+already own displays.
+
+New: **docs/BOM.md**, a sourced parts list with domestic vendors, current prices and build
+totals, written for the wider animatronics/props/cosplay audience as well as IRIS. Verified
+2026-07-21: S3 devkit $15.00 (DigiKey, 704), SEN0626 $14.90 (DigiKey, 41), Adafruit 6178 round
+GC9A01A $17.50, Teensy 4.0 $23.80, Teensy 4.1 $31.50. Two-eye S3 build lands at $64.90
+domestic or $47.10 with generic displays, against $63.90 for the currently VERIFIED
+single-eye Teensy build. Notable: **domestically the display dominates, not the MCU** (two
+panels $35.00 vs board plus camera $29.90), and **DigiKey cannot complete the cart** since its
+only round GC9A01A listing is marked obsolete, so a domestic build is two vendors.
+
+README gained the standalone-animatronic framing and links to the BOM.
+
+- Recommendation: **buy nothing yet.** Two cheap measurements gate everything. First uncomment
+  `SHOW_FPS` (`src/displays/Display.h:5`) and record the Teensy's frame rate, which **has
+  never been measured on any board**, so "fast enough" currently has no baseline. Then run the
+  real inner loop on the N16R8 already on hand.
+- Status: REPO-ONLY, docs only. Nothing built for S3, nothing flashed, no frame rate observed
+  anywhere. Two-eye rendering has never run on hardware on any board. Re-running
+  docs/BENCH_PROTOCOL.md on the Teensy remains the standing #1 priority.

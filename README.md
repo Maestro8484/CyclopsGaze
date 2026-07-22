@@ -32,10 +32,19 @@ consumer-side edits. See [Status](#status).
 
 So this repo is two things at once:
 
-1. **A standalone demo**: Teensy + one round eye + one camera = an eye that follows your
-   face. Buildable and runnable on its own.
+1. **A standalone animatronic eye**: one board + one round display + one camera = an eye that
+   follows your face. Buildable and runnable entirely on its own, with no connection to IRIS.
 2. **A hardware/driver module of IRIS**: the publicly-sourceable gaze-sensor path, validated
    here in isolation before touching the live robot.
+
+If you came here for the first one, you do not need to care about the rest. A face-tracking
+eye is useful well outside this project: Halloween props that follow trick-or-treaters,
+cosplay helmets and masks, puppets and creature builds, art pieces and desk toys. The
+difference from a typical "uncanny eyes" build is that this one **tracks a real face** rather
+than wandering on a timer, and the face detection runs on the camera itself rather than
+needing a Pi or a PC. Around **$47 in parts** for a single tracking eye, or **$32** if you
+skip the camera and let it wander. Full parts list, sources and current prices:
+**[docs/BOM.md](docs/BOM.md)**.
 
 ---
 
@@ -49,8 +58,10 @@ So this repo is two things at once:
 
 The gaze pipeline is portable: the SEN0626 driver and TeensyEyes engine are plain C++, so
 the same approach ports to any board with a hardware UART + SPI and enough RAM for the eye
-framebuffer.
+framebuffer. A cheaper ESP32-S3 build is being evaluated and is **not yet proven**, see
+[docs/ESP32_S3_MIGRATION.md](docs/ESP32_S3_MIGRATION.md).
 
+Part numbers, vendors, current prices and build totals: **[docs/BOM.md](docs/BOM.md)**.
 Full pin tables, wire colors, power notes, and the dual-eye layout: **[docs/WIRING.md](docs/WIRING.md)**.
 
 ### Quick wiring summary (single eye)
