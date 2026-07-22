@@ -326,3 +326,50 @@ now a cheap `PS_CFG:` test. See docs/ENGINEERING_LOG.md CG-S13 and docs/IRIS_INT
   session (`pio device list`: COM1 legacy + COM4/5 Bluetooth only). The PS_CFG parser, facing
   gate and IRIS-form gaze math are unverified on hardware, on top of CG-S12's unverified gate
   + gain/bias. Re-running docs/BENCH_PROTOCOL.md remains the #1 priority.
+
+## CG-S14 (2026-07-21) - ESP32-S3 migration feasibility study (docs only, no code)
+
+Exploratory study of moving off the Teensy 4.1, driven by BOM cost / public replicability
+(operator, this session). **No source file was touched**; `FIRMWARE_VERSION` stays CG-S13.
+Full study: **[docs/ESP32_S3_MIGRATION.md](docs/ESP32_S3_MIGRATION.md)**.
+
+Portability audit, measured against live source this session:
+- `EyeController.h` (600 lines, read in full), `eyes.h`, and all ~18k lines of LUT data are
+  **portable unchanged**. No Teensy API in any of them; `PROGMEM` is a no-op on both targets and
+  the tables are dereferenced directly, not via `pgm_read_byte`. The render engine was expected
+  to be the blocker and is not.
+- `GC9A01A_t3n` is **unportable and must be replaced**. Its `library.json` claims
+  `"platforms": "*"`, which is false: the header is gated on `__IMXRT1062__`/`__IMXRT1052__`/
+  `KINETISK`, includes Teensy's `DMAChannel.h`, and drives `IMXRT_LPSPI_t`/`KINETISK_SPI_t`
+  registers directly (29 sites in the `.cpp`). Replacement is LovyanGFX or TFT_eSPI, not a
+  hand-rolled driver.
+- The port is tractable because `src/displays/Display.h` (CRTP, 5 methods) is already the seam.
+  Swapping backends is one new ~150-line class selected in `config.h`, not a render rewrite.
+- Three driver blockers, all in the contract-sensitive `SEN0626Sensor.{h,cpp}`: `elapsedMillis`
+  members (`.h:99`), `serial.begin(baud)` needing S3 pin-matrix args (`.cpp:68`), and
+  `while (millis() < BOOT_SETTLE_MS) {}` (`.cpp:84`).
+- **Latent bug found, not introduced by the port.** That 2-second bare spin at `.cpp:84` has no
+  yield: harmless on bare-metal Teensy, but under FreeRTOS on an S3 it starves the idle task and
+  risks a task-watchdog reset. The portable fix (delay-based wait) is correct on both platforms.
+  ⚠ **IRIS runs this same code on its T4.1** — flagged for IRIS, not edited (read-only from here).
+
+BOM, prices fetched from vendor pages this session (not recalled):
+- Teensy 4.1 **$31.50** (SparkFun, in stock); DFRobot SEN0626 **$14.90**;
+  Waveshare ESP32-S3-DualEye-LCD-1.28 (ESP32-S3R8, 8 MB PSRAM, 16 MB flash, **two** onboard
+  240×240 GC9A01 round panels) **~$16-18**.
+- Dual-eye build: **~$65-68 → ~$31-33**, roughly half, with all display wiring eliminated.
+- A premise checked and rejected: "the AI camera dominates the BOM so the MCU is the wrong
+  lever" is false at $14.90. The $31.50 Teensy is the biggest line item.
+
+The measured render-loop numbers that decide the migration: up to **5 random-access table reads
+per pixel** over **≈351 KB** of LUTs and textures (polarAngle 57,600 + polarDist 57,600 + disp
+14,400 + iris 131,072 + sclera 90,000), plus a 115,200-byte framebuffer per eye. Proposed
+allocation is LUTs → internal SRAM, framebuffers → PSRAM, which is why an R8 part is specified.
+That allocation is **arithmetic, not observation**, and may not fit; a fallback is documented.
+
+- Recommendation: **buy nothing yet.** Prove it with a throwaway frame-rate spike on the N16R8
+  already on hand — real tables, real inner loop, no abstractions — gated at ≥20 FPS single-eye.
+  A day's work that answers the only unknowable question before any refactoring is committed to.
+- Status: REPO-ONLY, docs only. Nothing built for S3, nothing flashed, no frame rate observed.
+  Re-running docs/BENCH_PROTOCOL.md on the Teensy remains the standing #1 priority and is
+  unaffected by this study.

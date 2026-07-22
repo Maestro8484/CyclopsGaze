@@ -587,3 +587,84 @@ Checks that would confirm, in order, on the next flash with a spare SEN0626 + T4
    travel; a typo'd key answers `UNKNOWN key` and changes nothing.
 3. Full docs/BENCH_PROTOCOL.md re-run (steps 5–7 re-confirm CG-S12).
 4. The IRIS-vs-CyclopsGaze value comparison above.
+
+## CG-S14 (2026-07-21): ESP32-S3 migration feasibility (docs only)
+
+Exploratory only. No source touched, `FIRMWARE_VERSION` unchanged at CG-S13. The full study is
+**[ESP32_S3_MIGRATION.md](ESP32_S3_MIGRATION.md)**; recorded here are the findings that are facts
+about *this* codebase and outlive the migration question either way.
+
+### The render engine is not the Teensy-coupled part — the display driver is
+
+Expectation going in was that 19k lines of TeensyEyes would be the blocker. Read against live
+source, it is not. `EyeController.h` was read in full (600 lines): pure C++ plus Arduino
+`millis()`/`random()`, no Teensy API anywhere. `eyes.h` is the same but for an ARM-only `-Wpsabi`
+pragma at line 5. The ~18k lines of LUT data are portable as written — `PROGMEM` is a no-op on
+both Teensy 4 and ESP32, and the code dereferences the tables directly rather than through
+`pgm_read_byte`, so the same source works on both.
+
+What *is* welded to the Teensy is `GC9A01A_t3n`. Its `library.json` advertises
+`"platforms": "*"` — that manifest is wrong. The header is gated on `__IMXRT1062__` /
+`__IMXRT1052__` / `KINETISK`, includes Teensy's `DMAChannel.h`, and manipulates `IMXRT_LPSPI_t`
+and `KINETISK_SPI_t` peripheral register structs directly (29 sites in the `.cpp`). It cannot be
+ported, only replaced.
+
+That the swap is cheap is a property the repo already has and should keep: `displays/Display.h`
+is a 31-line CRTP base with exactly five methods (`drawPixel`, `drawFastVLine`, `drawText`,
+`update`, `isAvailable`), and `EyeController` is templated on it. Any backend that implements
+those five is a drop-in selected in `config.h`. Worth protecting in future edits — it is what
+makes the render engine portable in practice and not just in principle.
+
+One dependency hides in that seam: `GC9A01A_Display.cpp:22` calls `updateChangedAreasOnly(true)`.
+Any replacement backend needs an equivalent or it pushes the full 115,200-byte buffer every
+frame — a hard ~21 FPS ceiling at 20 MHz SPI from bus time alone.
+
+### Latent bug in the driver, exposed by the port question (applies to the Teensy build too)
+
+[`SEN0626Sensor.cpp:84`](../src/sensors/SEN0626Sensor.cpp#L84) waits out the sensor's AI-model
+boot with `while (millis() < BOOT_SETTLE_MS) {}` — a 2-second bare spin with no yield. On the
+bare-metal Teensy this is harmless and has never caused a problem. Under FreeRTOS on an ESP32-S3
+it starves the idle task and risks a task-watchdog reset. The fix (a `delay()`-based wait) is
+strictly correct on both platforms and costs nothing on Teensy.
+
+⚠ **IRIS runs this same driver on its own T4.1.** Harmless there today, same shape. Flagged for
+an IRIS session; not edited from here (IRIS is read-only from this repo).
+
+### Measured render-loop cost — the numbers, so they are not re-derived
+
+The inner loop ([EyeController.h:364-443](../src/eyes/EyeController.h#L364)) does **up to 5
+random-access table reads per pixel**, over up to 57,600 pixels/frame:
+
+| Table | Bytes |
+|---|---|
+| `polarAngle_240[240*240]` | 57,600 |
+| `polarDist_240_125_69_0[240*240]` | 57,600 |
+| `disp_240_125[120*120]` | 14,400 |
+| `eyeIris[512*128]` uint16 | 131,072 |
+| `eyeSclera[600*75]` uint16 | 90,000 |
+| **total** | **≈351 KB** |
+
+Plus 115,200 B of framebuffer per eye (`useFrameBuffer=true`). These figures were counted from
+the declarations this session and are consistent with the CG-S2 build report's 361,032 bytes of
+flash data.
+
+This is the whole migration risk in one place: on a 600 MHz M7 it is a solved problem and runs
+today; on a 240 MHz LX7 with ~351 KB of *random* access it is a cache-hit-rate question that no
+amount of code reading can answer. Hence the study's kill gate — spike the real loop over the
+real tables and measure FPS *before* refactoring anything.
+
+### BOM (prices fetched from vendor pages 2026-07-21, not recalled)
+
+Teensy 4.1 **$31.50** (SparkFun, in stock) · SEN0626 **$14.90** (DFRobot) · Waveshare
+ESP32-S3-DualEye-LCD-1.28, ESP32-S3R8 + 8 MB PSRAM + 16 MB flash + **two** onboard 240×240 GC9A01
+round panels, **~$16-18**. Dual-eye build ~$65-68 → ~$31-33.
+
+The objection worth recording as *checked and rejected*: "the AI camera dominates the BOM, so the
+MCU is the wrong lever." At $14.90 the SEN0626 does not dominate. The $31.50 Teensy is the single
+largest line item, so the MCU is in fact the right lever for a cost-driven change.
+
+### Status
+
+REPO-ONLY, docs only. Nothing was built for ESP32-S3, nothing flashed, no frame rate observed.
+The standing #1 priority is unchanged and unaffected: re-run docs/BENCH_PROTOCOL.md on the Teensy
+to close out CG-S12/CG-S13's unverified gate, gain/bias, PS_CFG parser and facing gate.
