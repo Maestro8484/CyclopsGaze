@@ -88,9 +88,10 @@ IRIS-verbatim EyeController — informational, not a warning.
 - **Gaze chain and the `PS_CFG:` ack are now bench-observed.** ⚠ `PS_CONF_GATE_DEFAULT = 60`
   chatters on the noise floor at bench range (scores 60-79, REJECT at 60); live-tuned to 50,
   RAM-only, not yet written to config.h.
-- ⚠ **Owed:** does the flicker clear at 20-22 FPS. If not, compare 3.12 V at the display against
-  the Teensy's own 3.3 V pin, and consider async tearing. **Turn `SHOW_FPS` and `CG_CALIB_RAW`
-  off** when bench work ends.
+- **Flicker CLOSED** at CG-S17c (operator: "mostly fixed, observable only with close inspection").
+  The 3.12 V rail was a red herring. ⚠ Residual artefact at 20-22 FPS against a 32.5 FPS bus
+  ceiling; one flash at 40 MHz would say whether it is render-bound. **Turn `SHOW_FPS` and
+  `CG_CALIB_RAW` off** before any demo build.
 - Eye artwork: read docs/EYE_ARTWORK.md and the `src/config.h` header comment before touching eye
   selection. A disabled eye costs zero flash, measured, so bundling is nearly free.
 - ⚠ **Owed:** a head-to-head behavioral comparison of CyclopsGaze's tuning values vs live IRIS's

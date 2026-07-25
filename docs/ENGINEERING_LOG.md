@@ -1037,11 +1037,22 @@ in IRIS's exact wording, confirmed by a readback reporting `CONF=50`.
 Newly VERIFIED at CG-S16/S17, all previously owed: the `PS_CFG?` readback, the `PS_CFG:` ack, the
 unknown-key guard, `EYE?`/`EYE:next` at one set, the gaze chain end to end, and the frame rate.
 
+**Flicker: CLOSED.** Operator, same session, after the 30 MHz async build: *"looks better, mostly
+fixed, observable only with close inspection."* The chain of reasoning held up end to end: a
+negative A/B eliminated signal integrity, the first FPS measurement identified refresh rate, and
+adopting upstream's two values roughly doubled it. The 3.12 V at the display was **not** the
+cause and never needed chasing, which is worth remembering next time a rail reads slightly low:
+CG-S5's 2.6 V was a real fault, 3.12 V was a red herring. Async tearing did not appear.
+
 Still open:
-- **Whether 20-22 FPS actually clears the flicker.** Operator's call, not reported yet. If it
-  does not, compare the 3.12 V at the display against the **Teensy's own 3.3 V pin**: 3.3 V there
-  means the drop is in the dupont run, 3.12 V there means the onboard regulator is loaded down by
-  display plus SEN0626. Async tearing is also newly possible in this build.
+- **The residual artefact at 20-22 FPS, and which of two things bounds it.** A full frame at
+  30 MHz is 115,200 x 8 / 30e6 = 30.7 ms, a 32.5 FPS ceiling, but 20-22 FPS means 45-50 ms per
+  frame. Either async fully overlaps and the render itself takes ~45-50 ms, in which case a
+  faster clock buys nothing and the only lever is the 214,492 table reads per frame that CG-S14
+  measured; or the transfer is only partly hidden, in which case clock still helps. **A single
+  flash at 40 MHz distinguishes them:** flat means render-bound, a rise means bus time is still
+  exposed. Not attempted, because 30 MHz is upstream's proven value and exceeding it on dupont
+  wiring reintroduces exactly the signal-integrity risk this session eliminated.
 - `CG_CALIB_RAW` prints two lines per sensor sample and `SHOW_FPS` prints one a second. Both are
   bench instrumentation and should be turned off before any demo build.
 - Unchanged: facing gate, `LOST_MS`/autoMove resume, NATIVE_H, a second eye rendering, dual-eye

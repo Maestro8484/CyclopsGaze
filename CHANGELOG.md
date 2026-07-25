@@ -746,9 +746,27 @@ than one sitting.
 **CG-S17c is DEPLOYED**, boot line and `SPI clocks:30000000 2000000` both observed. Newly
 VERIFIED this session: the gaze chain end to end, the `PS_CFG:` ack, and the frame rate.
 
-⚠ **Open:** whether 20-22 FPS actually resolves the flicker is the operator's call and has not
-been reported yet. If it does not, the remaining suspects are the 3.12 V rail (measure the
-**Teensy's own 3.3 V pin** at the same time: if it reads 3.3 the drop is in the dupont run, if it
-also reads 3.12 the regulator is loaded down by display plus SEN0626) and async tearing, which is
-new as of this build. Also still true: `SHOW_FPS` and `CG_CALIB_RAW` should both be turned off
-once bench work ends, the latter because it prints two lines per sensor sample.
+**Confirmed by the operator, same session: "looks better, mostly fixed, observable only with
+close inspection."** So the diagnosis holds and the flicker is closed as a fault. The 3.12 V
+reading is left on the record but is **not** the cause; it never needed chasing. Async tearing
+did not materialise either.
+
+⚠ **Residual, and where the remaining headroom is.** A faint artefact survives at 20-22 FPS,
+which is unsurprising at a ~21 Hz refresh. The arithmetic bounds what is left: a full frame at
+30 MHz is 115,200 bytes x 8 / 30e6 = **30.7 ms, a 32.5 FPS ceiling**, while 20-22 FPS means
+**45-50 ms per frame**. Two readings fit that, and they have opposite fixes:
+
+- **Render-bound.** If async fully overlaps, frame time is `max(render, transfer)`, so the render
+  is ~45-50 ms and the bus is idle a third of the time. More SPI clock buys nothing, and the only
+  lever is render cost: 43,312 pixels at 4.95 table reads each, 214,492 reads per frame (CG-S14).
+- **Partially overlapped.** If the transfer is not fully hidden, frame time is closer to
+  `render + transfer` and a faster clock still helps.
+
+**One flash distinguishes them:** set `SPI_SPEED` to 40 MHz and re-read the counter. Flat means
+render-bound and 30 MHz is the right resting place; a rise means bus time is still exposed. Not
+done, because 30 MHz is upstream's proven value and going beyond it on dupont wiring reintroduces
+the signal-integrity risk this session just eliminated.
+
+Housekeeping before any demo build: **turn off `SHOW_FPS` and `CG_CALIB_RAW`.** Note the latter is
+not an FPS problem, roughly 14 serial lines per second against a ~21 Hz loop, so it is about
+clean output rather than speed.

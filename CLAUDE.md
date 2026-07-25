@@ -95,11 +95,13 @@ IRIS-verbatim EyeController — informational, not a warning.
   too. ⚠ But `PS_CONF_GATE_DEFAULT = 60` **chatters on the noise floor** at bench distance:
   scores swing 60-79 and REJECT at exactly 60. Live-tuned to `CONF=50` (RAM-only, **not** written
   to config.h yet, needs more than one sitting to justify).
-- ⚠ **Owed by the operator:** does the flicker actually clear at 20-22 FPS. If not, next is the
-  3.12 V reading at the display, compared against the Teensy's own 3.3 V pin (3.3 there means the
-  drop is in the dupont run; 3.12 there means the regulator is loaded by display plus sensor), and
-  async tearing, which is new in this build. **Turn `SHOW_FPS` and `CG_CALIB_RAW` back off** when
-  bench work ends.
+- **Flicker CLOSED** at CG-S17c: operator reports "mostly fixed, observable only with close
+  inspection" at 20-22 FPS. The 3.12 V rail was a red herring, not the cause. ⚠ Residual artefact
+  remains; a full frame at 30 MHz is 30.7 ms (32.5 FPS ceiling) against 45-50 ms measured, so
+  either the render is the bound or the transfer is only partly hidden. **One flash at 40 MHz
+  distinguishes them** (flat = render-bound). Not attempted: 30 MHz is upstream's proven value and
+  more clock on dupont reintroduces the risk just eliminated.
+- **Turn `SHOW_FPS` and `CG_CALIB_RAW` off** before any demo build.
 - Eye artwork: 10 bundled, 13 more upstream a copy away, and 6 MIT Adafruit designs never ported
   to TeensyEyes at all. A disabled eye costs **zero** flash, measured. See docs/EYE_ARTWORK.md
   and the `src/config.h` header comment before touching eye selection.
