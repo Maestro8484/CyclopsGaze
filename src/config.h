@@ -1,6 +1,6 @@
 #pragma once
 
-static constexpr char FIRMWARE_VERSION[] = "CG-S16";
+static constexpr char FIRMWARE_VERSION[] = "CG-S17";
 
 #include "eyes/eyes.h"
 
@@ -255,7 +255,19 @@ GC9A01A_Config eyeInfo[] = {
     { 9, 8, 11, 13,  6, 0, false, true, false},  // eye 1 (second display)
 };
 
-constexpr uint32_t SPI_SPEED{20'000'000};
+// CG-S17: 20 MHz -> 10 MHz, to test the display jitter/flicker seen at CG-S16 on
+// all-dupont breadboard wiring. Dupont jumpers are a poor transmission line at
+// 20 MHz: unshielded, no ground return paired with SCK/MOSI, breadboard stray
+// capacitance. This is the cheap discriminator, not a fix. If the flicker clears,
+// the cause is signal integrity and the real fix is physical (shorter leads, a
+// ground return alongside the clock, eventually solder), after which this can go
+// back up. If the flicker is unchanged, look at the 3.3 V rail measured at the
+// DISPLAY's own VCC pin under load (the CG-S5 failure mode), then at the frame
+// rate. Cost of the halving: CG-S14 measured a full 115,200-byte frame as a
+// ~21 FPS bus-time ceiling at 20 MHz, so this roughly halves that headroom.
+// updateChangedAreasOnly(true) (GC9A01A_Display.cpp:22) is what keeps the normal
+// case well under a full-frame push.
+constexpr uint32_t SPI_SPEED{10'000'000};
 
 EyeController<2, GC9A01A_Display> *eyes{};
 GC9A01A_Display *displayMain{};
@@ -304,7 +316,19 @@ GC9A01A_Config eyeInfo[] = {
     {10, 2, 11, 13, 3, 0, true, true, false},
 };
 
-constexpr uint32_t SPI_SPEED{20'000'000};
+// CG-S17: 20 MHz -> 10 MHz, to test the display jitter/flicker seen at CG-S16 on
+// all-dupont breadboard wiring. Dupont jumpers are a poor transmission line at
+// 20 MHz: unshielded, no ground return paired with SCK/MOSI, breadboard stray
+// capacitance. This is the cheap discriminator, not a fix. If the flicker clears,
+// the cause is signal integrity and the real fix is physical (shorter leads, a
+// ground return alongside the clock, eventually solder), after which this can go
+// back up. If the flicker is unchanged, look at the 3.3 V rail measured at the
+// DISPLAY's own VCC pin under load (the CG-S5 failure mode), then at the frame
+// rate. Cost of the halving: CG-S14 measured a full 115,200-byte frame as a
+// ~21 FPS bus-time ceiling at 20 MHz, so this roughly halves that headroom.
+// updateChangedAreasOnly(true) (GC9A01A_Display.cpp:22) is what keeps the normal
+// case well under a full-frame push.
+constexpr uint32_t SPI_SPEED{10'000'000};
 
 EyeController<1, GC9A01A_Display> *eyes{};
 GC9A01A_Display *displayMain{};

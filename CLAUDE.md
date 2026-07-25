@@ -83,9 +83,14 @@ IRIS-verbatim EyeController — informational, not a warning.
   resume, NATIVE_H 480-vs-640, a second eye actually rendering, dual-eye (step 10) and the frame
   rate (step 11, **never executed on any board**). **docs/BENCH_PROTOCOL.md is still the #1
   priority**, but the list is now much shorter.
-- ⚠ **Open bench fault:** display jitter/flicker with all-dupont breadboard wiring. Undiagnosed.
-  Bring-up is clean, so test in this order: `SPI_SPEED` 20 MHz → 10 MHz, then 3.3 V measured at
-  the display's own VCC under load (the CG-S5 failure mode), then the unmeasured frame rate.
+- **CG-S17 is DEPLOYED** (flashed 2026-07-25, boot line and `SPI clocks:10000000` both observed
+  on COM6). It is the flicker A/B: `SPI_SPEED` halved to 10 MHz, and `SHOW_FPS` enabled to get
+  this project's first frame-rate reading on any board.
+- ⚠ **Two answers owed by the operator, unobtainable over serial:** did the flicker change at
+  10 MHz, and what number does the on-screen FPS counter show. Until then the flicker is still
+  undiagnosed (next suspects: 3.3 V at the display's own VCC under load, the CG-S5 failure mode)
+  and BENCH_PROTOCOL step 11 is unexecuted in substance. **Comment `SHOW_FPS` back out** once the
+  figure is recorded.
 - Eye artwork: 10 bundled, 13 more upstream a copy away, and 6 MIT Adafruit designs never ported
   to TeensyEyes at all. A disabled eye costs **zero** flash, measured. See docs/EYE_ARTWORK.md
   and the `src/config.h` header comment before touching eye selection.

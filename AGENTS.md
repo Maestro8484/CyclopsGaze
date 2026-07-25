@@ -80,9 +80,11 @@ IRIS-verbatim EyeController — informational, not a warning.
 - ⚠ **Still UNVERIFIED:** the gaze chain in this build (no `faces=` observed), facing gate,
   `LOST_MS` resume, NATIVE_H, a second eye rendering, dual-eye (step 10), frame rate (step 11,
   never run on any board). **docs/BENCH_PROTOCOL.md is still the #1 priority.**
-- ⚠ **Open bench fault:** display jitter/flicker on all-dupont breadboard wiring. Bring-up is
-  clean. Test order: `SPI_SPEED` 20 → 10 MHz, then 3.3 V at the display's own VCC under load, then
-  the never-measured frame rate.
+- **CG-S17 is DEPLOYED** (flashed 2026-07-25; boot line and `SPI clocks:10000000` observed on
+  COM6): the flicker A/B, `SPI_SPEED` 20 → 10 MHz plus `SHOW_FPS` enabled.
+- ⚠ **Owed by the operator, not obtainable over serial:** whether the flicker changed, and the
+  on-screen FPS number. Next flicker suspect if 10 MHz did nothing is the 3.3 V rail at the
+  display's own VCC under load. **Comment `SHOW_FPS` back out** once the figure is recorded.
 - Eye artwork: read docs/EYE_ARTWORK.md and the `src/config.h` header comment before touching eye
   selection. A disabled eye costs zero flash, measured, so bundling is nearly free.
 - ⚠ **Owed:** a head-to-head behavioral comparison of CyclopsGaze's tuning values vs live IRIS's

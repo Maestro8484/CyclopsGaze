@@ -2,7 +2,12 @@
 
 #include <Arduino.h>
 
-//#define SHOW_FPS
+// Renders a frames-per-second counter ON THE EYE ITSELF, not to serial. Enabled
+// at CG-S17 to get this project's first frame-rate measurement on any board
+// (BENCH_PROTOCOL step 11, never executed before). The reading is slightly
+// pessimistic because drawing the counter costs time. Comment out again once the
+// number is recorded, or it sits on top of the artwork forever.
+#define SHOW_FPS
 
 template <typename T>
 class Display {

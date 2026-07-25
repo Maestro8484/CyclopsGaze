@@ -637,3 +637,37 @@ discriminator is dropping `SPI_SPEED` to 10 MHz and re-observing; if the flicker
 the next suspects are the 3.3 V rail measured at the display's own VCC pin under load (the CG-S5
 failure mode) and then the refresh rate itself, which **has never been measured on any board**
 (`SHOW_FPS`, `src/displays/Display.h:5`, BENCH_PROTOCOL step 11, never executed).
+
+## CG-S17 (2026-07-25) - flicker A/B: SPI 20 -> 10 MHz, and the first frame-rate reading
+
+Two one-line changes, flashed together, to attack the CG-S16 flicker report and to finally
+execute BENCH_PROTOCOL step 11. `FIRMWARE_VERSION` CG-S16 → **CG-S17**.
+
+- **`SPI_SPEED` 20 MHz → 10 MHz** (both the single-eye and DUAL_EYE branches of `config.h`).
+  This is a discriminator, not a fix. Dupont jumpers on a breadboard are a poor transmission line
+  at 20 MHz: unshielded, no ground return paired with SCK/MOSI, breadboard stray capacitance. If
+  the flicker clears, the cause is signal integrity and the real fix is physical, after which the
+  clock can go back up. Cost of halving it: CG-S14 measured a full 115,200-byte frame as a ~21 FPS
+  bus-time ceiling at 20 MHz, so this roughly halves that headroom.
+  `updateChangedAreasOnly(true)` is what keeps the normal case well under a full-frame push.
+- **`SHOW_FPS` enabled** (`src/displays/Display.h:5`), commented out since the engine was bundled
+  at CG-S1. **This project has never had a frame-rate number on any board**, which is the gap
+  CG-S14 flagged as blocking any ESP32-S3 judgement. The counter renders **on the eye itself**,
+  not to serial, so the reading has to be read off the display and is slightly pessimistic
+  because drawing it costs time.
+
+- Build clean: FLASH code 85,500 / data 362,056 / RAM1 free 413,824. Code grew 1,664 bytes over
+  CG-S16 for the counter; data is unchanged.
+- **Status: DEPLOYED.** Flashed and read back on COM6 the same minute:
+  `[CG] CyclopsGaze CG-S17`, `VERSION` agreeing, and crucially
+  `_t3n::begin mosi:11 SCLK:13 CS:10 DC:2 SPI clocks:10000000 2000000`, so the new clock is
+  confirmed live on the wire rather than merely compiled. Sensor found at 9600 on attempt 1,
+  `EYE_DUMP` still `count=1 nordicBlue`.
+- ⚠ **Not VERIFIED, and it cannot be from here:** both of this session's questions need human
+  eyes on the display. Whether the flicker changed, and what number the FPS counter shows, are
+  invisible over serial. Until the operator reports them, the flicker cause is still undiagnosed
+  and step 11 is still unexecuted in substance. Record the FPS figure here when it is read; it
+  becomes the baseline that
+  [docs/ESP32_S3_MIGRATION.md](docs/ESP32_S3_MIGRATION.md) has been waiting on.
+- Reminder for the next session: **comment `SHOW_FPS` back out** once the number is recorded, or
+  the counter sits on the artwork permanently.
