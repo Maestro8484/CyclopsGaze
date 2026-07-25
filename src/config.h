@@ -1,10 +1,74 @@
 #pragma once
 
-static constexpr char FIRMWARE_VERSION[] = "CG-S15";
+static constexpr char FIRMWARE_VERSION[] = "CG-S16";
 
 #include "eyes/eyes.h"
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Eye artwork: pick one (CG-S16)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Ten eye designs ship with this repo. Enabling one is two uncomments that have
+// to agree: the #include here, and the matching row in eyeDefinitions below.
+// That pairing is upstream TeensyEyes' own mechanism (its src/config.h does
+// exactly this with 23 eyes), adopted rather than reinvented.
+//
+// A disabled eye costs ZERO flash. Measured on this toolchain at CG-S16, not
+// assumed: the Teensy builder passes -fdata-sections and -Wl,--gc-sections, so
+// tables nothing references are dropped at link time. Controlled A/B, one
+// variable, everything else identical: hazel.h included but its row commented
+// out gave FLASH code 83,836 / data 362,056, and commenting the #include as well
+// gave exactly the same two figures. Both equal the CG-S13 baseline from before
+// any second eye existed, so the eight bundled-but-disabled headers and the ten
+// bundled table .cpp files cost nothing at all.
+//
+// Consequence: a stale #include costs build time only, never flash. The failure
+// mode that actually matters is the reverse, uncommenting a row without its
+// #include, and that is a compile error naming the eye.
+//
+// All ten share polar.mapRadius 240, so any of them may also be swapped at
+// runtime (see the rotation note in eyeDefinitions). What actually differs:
+//
+//   eye         eyeball  surround      iris    pupil       notes
+//   nordicBlue  125 px   black         69 px   0.25-0.47   original artwork, default
+//   bigBlue     125 px   black         85 px   0.30-0.70   realistic, largest human iris
+//   hazel       125 px   colour 35138  60 px   0.30-0.70   realistic, small iris
+//   doe         130 px   black         95 px   0.30-0.40   animal, has left/right
+//   dragon      125 px   black         90 px   0.10-0.20   slit pupil, black sclera
+//   cat         125 px   colour 65504  90 px   0.30-0.40   slit pupil, untextured
+//   demon       125 px   colour 20480  110 px  0.10-0.25   slit pupil, spinning iris,
+//                                                          tracking off, has left/right
+//   doomRed     125 px   colour 42260  50 px   0.15-0.40   tiny iris
+//   fish        120 px   black         115 px  0.40-0.50   no eyelids
+//   skull       120 px   black         70 px   0.10-0.25   no eyelids
+//
+// "surround" is EyeDefinition::backColor, painted where the eyeball ends but the
+// eyelid aperture continues (EyeController.h:435). Raw 565 values are given
+// rather than colour names because none of the four has been observed on this
+// display yet. nordicBlue's is black, so the coloured ones will not match it.
+//
+// That is also the answer to "hazel looks off" (operator, bench, CG-S16): hazel
+// is byte-identical to upstream and this engine reads its parameters with the
+// same expressions upstream does, so nothing is broken. It is authored
+// differently: non-black surround, a 60 px iris where nordicBlue has 69, a pupil
+// reaching 0.70 of that smaller iris where nordicBlue stops at 0.47, and half
+// the squint. Different design, not a defect. docs/ENGINEERING_LOG.md CG-S16.
+//
+// Adding one of the 13 upstream eyes not bundled here: copy <name>.h from
+// TeensyEyes/src/eyes/240x240/, plus every polarDist_240_* / disp_240_* /
+// noeyelids_* table its header includes (.h and .cpp both), then add an #include
+// and a row. Full upstream list and credits: docs/ATTRIBUTION.md.
 #include "eyes/240x240/nordicBlue.h"
-#include "eyes/240x240/hazel.h"
+//#include "eyes/240x240/bigBlue.h"
+//#include "eyes/240x240/cat.h"
+//#include "eyes/240x240/demon.h"
+//#include "eyes/240x240/doe.h"
+//#include "eyes/240x240/doomRed.h"
+//#include "eyes/240x240/dragon.h"
+//#include "eyes/240x240/fish.h"
+//#include "eyes/240x240/hazel.h"
+//#include "eyes/240x240/skull.h"
+
 #include "eyes/EyeController.h"
 
 #define USE_GC9A01A
@@ -153,18 +217,34 @@ static constexpr bool     EYE_AUTO_ROTATE_DEFAULT = true;
 
 #ifdef DUAL_EYE
 
-// Eye sets. Outer index = set (rotation/EYE:next order), inner = per-display.
-// Both displays get the same look. The set NAME is read back out of
-// EyeDefinition::name (eyes.h), so there is no parallel name table to drift.
-// Adding a set: copy its header from TeensyEyes plus whichever
-// polarDist_240_<radius>_<irisRadius>_0 table it includes, add the include
-// above, and add a row here. All sets must share polar.mapRadius (240 here):
-// the gaze state in EyeController is stored in mapRadius units and is NOT
-// rescaled across a definition swap.
-std::array<std::array<EyeDefinition, 2>, 2> eyeDefinitions{{
-    {nordicBlue::eye, nordicBlue::eye},
-    {hazel::eye, hazel::eye},
-}};
+// Eye sets, dual-eye build. Outer index = set (rotation / EYE:next order),
+// inner = per-display, so both displays get the same look. The set NAME is read
+// back out of EyeDefinition::name (eyes.h), so there is no parallel name table
+// to drift. Uncomment a row plus its #include at the top of this file; the array
+// size is deduced, so there is no count to keep in step.
+//
+// Leave exactly one row uncommented for a fixed look. Uncomment two or more and
+// EYE:/auto-rotation cycles them (EYE_AUTO_ROTATE_DEFAULT below).
+//
+// mapRadius: every bundled eye uses 240, checked against all 23 upstream eyes at
+// CG-S16, so no combination here can break the one real constraint (gaze state
+// in EyeController is stored in mapRadius units and is NOT rescaled on a swap).
+// Eyeball radius may differ freely between sets: EyeController reads
+// definition->radius per frame (EyeController.h:233), it caches nothing.
+// Note demon and doe expose ::left / ::right rather than ::eye.
+std::array<EyeDefinition, 2> eyeDefinitions[] = {
+    {{nordicBlue::eye, nordicBlue::eye}},
+//  {{bigBlue::eye,    bigBlue::eye}},
+//  {{cat::eye,        cat::eye}},
+//  {{demon::left,     demon::right}},
+//  {{doe::left,       doe::right}},
+//  {{doomRed::eye,    doomRed::eye}},
+//  {{dragon::eye,     dragon::eye}},
+//  {{fish::eye,       fish::eye}},
+//  {{hazel::eye,      hazel::eye}},
+//  {{skull::eye,      skull::eye}},
+};
+constexpr size_t EYE_SET_COUNT{std::size(eyeDefinitions)};
 
 // Both on SPI0 (MOSI=11, SCK=13), separate CS. mirror flags match IRIS
 // left/right: eye 0 mirror=true (also gets the EyeController eyeIndex==0
@@ -182,7 +262,7 @@ GC9A01A_Display *displayMain{};
 GC9A01A_Display *displaySecond{};
 
 void initEyes(bool autoMove, bool autoBlink, bool autoPupils) {
-  auto &defs = eyeDefinitions.at(0);
+  auto &defs = eyeDefinitions[0];
   displayMain   = new GC9A01A_Display(eyeInfo[0], SPI_SPEED);
   displaySecond = new GC9A01A_Display(eyeInfo[1], SPI_SPEED);
   const DisplayDefinition<GC9A01A_Display> main{displayMain, defs[0]};
@@ -192,13 +272,32 @@ void initEyes(bool autoMove, bool autoBlink, bool autoPupils) {
 
 #else  // single eye (default)
 
-// Eye sets. Outer index = set (rotation/EYE:next order). See the DUAL_EYE
-// branch above for the notes on adding one; all sets must share
-// polar.mapRadius (240) because the gaze state is not rescaled on a swap.
-std::array<std::array<EyeDefinition, 1>, 2> eyeDefinitions{{
-    {nordicBlue::eye},
-    {hazel::eye},
-}};
+// Eye sets, single-eye build (the default). One row per selectable look, one
+// entry per row because there is one display. Outer index = set, in EYE:next and
+// auto-rotation order. See the DUAL_EYE branch above for the mapRadius and
+// per-frame-radius notes.
+//
+// To change the eye: comment this row out, uncomment another, and uncomment that
+// eye's #include at the top of this file. The array size is deduced, so nothing
+// else needs editing.
+//
+// Exactly one row uncommented means nothing rotates, which is the shipped
+// default and what a face-tracking demo wants. Uncomment two or more to get
+// switching, either on the EYE_ROTATE_MS_DEFAULT timer or by EYE:next over
+// serial. Note demon and doe expose ::left / ::right rather than ::eye.
+std::array<EyeDefinition, 1> eyeDefinitions[] = {
+    {{nordicBlue::eye}},
+//  {{bigBlue::eye}},
+//  {{cat::eye}},
+//  {{demon::left}},
+//  {{doe::left}},
+//  {{doomRed::eye}},
+//  {{dragon::eye}},
+//  {{fish::eye}},
+//  {{hazel::eye}},
+//  {{skull::eye}},
+};
+constexpr size_t EYE_SET_COUNT{std::size(eyeDefinitions)};
 
 // CS=10 DC=2 MOSI=11 SCK=13 RST=3  rotation=0 mirror=true useFrameBuffer=true asyncUpdates=false
 GC9A01A_Config eyeInfo[] = {
@@ -211,7 +310,7 @@ EyeController<1, GC9A01A_Display> *eyes{};
 GC9A01A_Display *displayMain{};
 
 void initEyes(bool autoMove, bool autoBlink, bool autoPupils) {
-  auto &defs = eyeDefinitions.at(0);
+  auto &defs = eyeDefinitions[0];
   displayMain = new GC9A01A_Display(eyeInfo[0], SPI_SPEED);
   const DisplayDefinition<GC9A01A_Display> main{displayMain, defs[0]};
   eyes = new EyeController<1, GC9A01A_Display>({main}, autoMove, autoBlink, autoPupils);

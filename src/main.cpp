@@ -60,12 +60,12 @@ static uint32_t eyeLastSwitchMs = 0;
 // drawAll, so the next renderFrame() repaints the whole eye rather than only
 // the area between the eyelids.
 static void applyEyeSet(size_t idx, const char *why) {
-  if (!eyes || idx >= eyeDefinitions.size()) return;
+  if (!eyes || idx >= EYE_SET_COUNT) return;
   eyeSetIndex = (uint8_t)idx;
-  eyes->updateDefinitions(eyeDefinitions.at(idx));
+  eyes->updateDefinitions(eyeDefinitions[idx]);
   eyeLastSwitchMs = millis();
   Serial.printf("[CG] EYE set=%u name=%s (%s)\n",
-                eyeSetIndex, eyeDefinitions.at(idx)[0].name, why);
+                eyeSetIndex, eyeDefinitions[idx][0].name, why);
 }
 
 static constexpr uint32_t SERIAL_BUF_SIZE = 40;  // matches IRIS; longest PS_CFG line is ~18 chars
@@ -152,11 +152,11 @@ static void processSerial() {
             eyeLastSwitchMs = millis();
             Serial.printf("[CG] EYE MS=%lu\n", (unsigned long)eyeRotateMs);
           } else if (strcmp(arg, "next") == 0) {
-            applyEyeSet((eyeSetIndex + 1) % eyeDefinitions.size(), "next");
+            applyEyeSet((eyeSetIndex + 1) % EYE_SET_COUNT, "next");
           } else {
             bool found = false;
-            for (size_t i = 0; i < eyeDefinitions.size(); i++) {
-              if (strcasecmp(arg, eyeDefinitions.at(i)[0].name) == 0) {
+            for (size_t i = 0; i < EYE_SET_COUNT; i++) {
+              if (strcasecmp(arg, eyeDefinitions[i][0].name) == 0) {
                 // An explicit pick beats the timer, otherwise the operator's
                 // choice would be silently overwritten within eyeRotateMs.
                 eyeAutoRotate = false;
@@ -172,12 +172,12 @@ static void processSerial() {
 
         } else if (strcmp(serialBuf, "EYE?") == 0) {
           Serial.printf("[CG] EYE_DUMP current=%u name=%s auto=%d ms=%lu count=%u sets:",
-                        eyeSetIndex, eyeDefinitions.at(eyeSetIndex)[0].name,
+                        eyeSetIndex, eyeDefinitions[eyeSetIndex][0].name,
                         eyeAutoRotate ? 1 : 0, (unsigned long)eyeRotateMs,
-                        (unsigned)eyeDefinitions.size());
-          for (size_t i = 0; i < eyeDefinitions.size(); i++) {
+                        (unsigned)EYE_SET_COUNT);
+          for (size_t i = 0; i < EYE_SET_COUNT; i++) {
             Serial.print(' ');
-            Serial.print(eyeDefinitions.at(i)[0].name);
+            Serial.print(eyeDefinitions[i][0].name);
           }
           Serial.println();
         }
@@ -206,7 +206,7 @@ void setup() {
   // set gets its full interval rather than a partial one.
   eyeLastSwitchMs = millis();
   Serial.printf("[CG] EYE sets=%u start=%s rotate=%s every %lums\n",
-                (unsigned)eyeDefinitions.size(), eyeDefinitions.at(0)[0].name,
+                (unsigned)EYE_SET_COUNT, eyeDefinitions[0][0].name,
                 eyeAutoRotate ? "on" : "off", (unsigned long)eyeRotateMs);
 }
 
@@ -216,9 +216,9 @@ void loop() {
   // Eye-set auto-rotation (CG-S15). Deliberately independent of the gaze block
   // below: the look changes on its own timer whether or not a face is present,
   // and swapping it does not touch tracking state.
-  if (eyeAutoRotate && eyeDefinitions.size() > 1 &&
+  if (eyeAutoRotate && EYE_SET_COUNT > 1 &&
       (millis() - eyeLastSwitchMs) >= eyeRotateMs) {
-    applyEyeSet((eyeSetIndex + 1) % eyeDefinitions.size(), "auto");
+    applyEyeSet((eyeSetIndex + 1) % EYE_SET_COUNT, "auto");
   }
 
   bool sampled = sensor.read();
