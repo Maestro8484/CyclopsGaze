@@ -19,7 +19,7 @@ file-level split, verified by diffing against pristine `github.com/chrismiller/T
 | `hazel.h` (CG-S15), and `bigBlue.h`, `cat.h`, `demon.h`, `doe.h`, `doomRed.h`, `dragon.h`, `fish.h`, `skull.h` (CG-S16) | **TeensyEyes, verbatim.** Nine of Chris Miller's eyes in their entirety, artwork included, copied unmodified from upstream as selectable eye sets. Not original to this project in any part. Verified byte-identical to upstream by `diff` at CG-S16. |
 | `polarDist_240_*.*`, `disp_240_1{20,25,30}.*`, `polarAngle_240.*`, `noeyelids_120.*` | TeensyEyes tooling, generated maps, verbatim. One `polarDist` variant per iris radius: `_69_0` is for `nordicBlue`, the other eight came in with the eyes that need them (CG-S15, CG-S16). |
 | `src/eyes/EyeController.h` | TeensyEyes, **modified** (~305 of ~700 lines changed) |
-| `src/eyes/eyes.h`, `src/displays/*` | TeensyEyes, largely / entirely **verbatim** |
+| `src/eyes/eyes.h`, `src/displays/*` | TeensyEyes, largely / entirely **verbatim**. One deliberate divergence: `GC9A01A_Display::update()` reports the `SHOW_FPS` counter over serial instead of drawing it on the eye (CG-S17b). |
 
 In plain terms: the eye-rendering engine, display driver, eyelid/polar maps, and **nine of the
 ten bundled eyes** are Chris Miller's (MIT; much of it copied byte-for-byte). By volume of

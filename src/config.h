@@ -1,6 +1,6 @@
 #pragma once
 
-static constexpr char FIRMWARE_VERSION[] = "CG-S17";
+static constexpr char FIRMWARE_VERSION[] = "CG-S17c";
 
 #include "eyes/eyes.h"
 
@@ -251,23 +251,26 @@ constexpr size_t EYE_SET_COUNT{std::size(eyeDefinitions)};
 // software X-flip), eye 1 mirror=false. The two eyes then track together.
 //        CS  DC MOSI SCK RST  ROT MIRROR USE_FB ASYNC
 GC9A01A_Config eyeInfo[] = {
-    {10, 2, 11, 13,  3, 0, true,  true, false},  // eye 0 (primary)
-    { 9, 8, 11, 13,  6, 0, false, true, false},  // eye 1 (second display)
+    {10, 2, 11, 13,  3, 0, true,  true, true},  // eye 0 (primary)
+    { 9, 8, 11, 13,  6, 0, false, true, true},  // eye 1 (second display)
 };
 
-// CG-S17: 20 MHz -> 10 MHz, to test the display jitter/flicker seen at CG-S16 on
-// all-dupont breadboard wiring. Dupont jumpers are a poor transmission line at
-// 20 MHz: unshielded, no ground return paired with SCK/MOSI, breadboard stray
-// capacitance. This is the cheap discriminator, not a fix. If the flicker clears,
-// the cause is signal integrity and the real fix is physical (shorter leads, a
-// ground return alongside the clock, eventually solder), after which this can go
-// back up. If the flicker is unchanged, look at the 3.3 V rail measured at the
-// DISPLAY's own VCC pin under load (the CG-S5 failure mode), then at the frame
-// rate. Cost of the halving: CG-S14 measured a full 115,200-byte frame as a
-// ~21 FPS bus-time ceiling at 20 MHz, so this roughly halves that headroom.
-// updateChangedAreasOnly(true) (GC9A01A_Display.cpp:22) is what keeps the normal
-// case well under a full-frame push.
-constexpr uint32_t SPI_SPEED{10'000'000};
+// CG-S17c: 30 MHz, which is upstream TeensyEyes' own value (its src/config.h
+// SPI_SPEED). CyclopsGaze had sat at 20 MHz since CG-S1 for no recorded reason.
+//
+// This is a measured decision, not a guess. CG-S17 dropped the clock to 10 MHz to
+// test whether the reported flicker was signal integrity on dupont jumpers. It was
+// not: the flicker persisted, and enabling SHOW_FPS exposed the real problem.
+// Measured 10-19 FPS at 10 MHz, which is exactly the full-frame bus-time ceiling
+// for 115,200 bytes at that clock (~92 ms, ~10.8 FPS). The panel is pushing
+// near-full frames because the eye aperture is 43,312 of 57,600 pixels (CG-S14),
+// leaving updateChangedAreasOnly(true) little to skip. A 10-15 Hz refresh on a
+// large white sclera is itself the flicker.
+//
+// Full-frame bus ceilings: 10 MHz ~10.8 FPS, 20 MHz ~21 FPS, 30 MHz ~32 FPS. If
+// artefacts appear at 30 MHz on breadboard wiring then it IS signal integrity and
+// 20 MHz is the fallback, but do not go back to 10.
+constexpr uint32_t SPI_SPEED{30'000'000};
 
 EyeController<2, GC9A01A_Display> *eyes{};
 GC9A01A_Display *displayMain{};
@@ -311,24 +314,35 @@ std::array<EyeDefinition, 1> eyeDefinitions[] = {
 };
 constexpr size_t EYE_SET_COUNT{std::size(eyeDefinitions)};
 
-// CS=10 DC=2 MOSI=11 SCK=13 RST=3  rotation=0 mirror=true useFrameBuffer=true asyncUpdates=false
+// CS=10 DC=2 MOSI=11 SCK=13 RST=3  rotation=0 mirror=true useFrameBuffer=true asyncUpdates=true
+//
+// CG-S17c: asyncUpdates false -> true, matching upstream TeensyEyes (its eyeInfo
+// sets ASYNC on both displays). Async pushes the framebuffer over SPI by DMA so
+// the next frame renders while the current one is still transferring, instead of
+// the loop stalling for the whole ~29 ms transfer. EyeController already supports
+// it: renderFrame() bails early on !display->isAvailable(), which is
+// !asyncUpdateActive(). Synchronous was costing roughly half the achievable
+// frame rate for no benefit anyone recorded.
 GC9A01A_Config eyeInfo[] = {
-    {10, 2, 11, 13, 3, 0, true, true, false},
+    {10, 2, 11, 13, 3, 0, true, true, true},
 };
 
-// CG-S17: 20 MHz -> 10 MHz, to test the display jitter/flicker seen at CG-S16 on
-// all-dupont breadboard wiring. Dupont jumpers are a poor transmission line at
-// 20 MHz: unshielded, no ground return paired with SCK/MOSI, breadboard stray
-// capacitance. This is the cheap discriminator, not a fix. If the flicker clears,
-// the cause is signal integrity and the real fix is physical (shorter leads, a
-// ground return alongside the clock, eventually solder), after which this can go
-// back up. If the flicker is unchanged, look at the 3.3 V rail measured at the
-// DISPLAY's own VCC pin under load (the CG-S5 failure mode), then at the frame
-// rate. Cost of the halving: CG-S14 measured a full 115,200-byte frame as a
-// ~21 FPS bus-time ceiling at 20 MHz, so this roughly halves that headroom.
-// updateChangedAreasOnly(true) (GC9A01A_Display.cpp:22) is what keeps the normal
-// case well under a full-frame push.
-constexpr uint32_t SPI_SPEED{10'000'000};
+// CG-S17c: 30 MHz, which is upstream TeensyEyes' own value (its src/config.h
+// SPI_SPEED). CyclopsGaze had sat at 20 MHz since CG-S1 for no recorded reason.
+//
+// This is a measured decision, not a guess. CG-S17 dropped the clock to 10 MHz to
+// test whether the reported flicker was signal integrity on dupont jumpers. It was
+// not: the flicker persisted, and enabling SHOW_FPS exposed the real problem.
+// Measured 10-19 FPS at 10 MHz, which is exactly the full-frame bus-time ceiling
+// for 115,200 bytes at that clock (~92 ms, ~10.8 FPS). The panel is pushing
+// near-full frames because the eye aperture is 43,312 of 57,600 pixels (CG-S14),
+// leaving updateChangedAreasOnly(true) little to skip. A 10-15 Hz refresh on a
+// large white sclera is itself the flicker.
+//
+// Full-frame bus ceilings: 10 MHz ~10.8 FPS, 20 MHz ~21 FPS, 30 MHz ~32 FPS. If
+// artefacts appear at 30 MHz on breadboard wiring then it IS signal integrity and
+// 20 MHz is the fallback, but do not go back to 10.
+constexpr uint32_t SPI_SPEED{30'000'000};
 
 EyeController<1, GC9A01A_Display> *eyes{};
 GC9A01A_Display *displayMain{};

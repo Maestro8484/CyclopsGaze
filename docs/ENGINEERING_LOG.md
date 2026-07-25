@@ -945,3 +945,104 @@ Suspects in the order they should be tested, cheapest first:
    `src/displays/Display.h:5` and BENCH_PROTOCOL step 11 has **never been executed on any board**,
    so there is no baseline to judge against. With the rig assembled and flashed, this is the
    cheapest that measurement will ever be.
+
+**Resolved the same session: it was suspect 3.** See CG-S17 below. Suspect 1 was tested and
+eliminated, suspect 2 is demoted but not closed.
+
+## CG-S17 (2026-07-25): the flicker was the frame rate, and the first FPS numbers
+
+### The negative result that solved it
+
+CG-S17 halved `SPI_SPEED` to 10 MHz purely as a discriminator. The operator reported the flicker
+**persisted, worst on the white sclera**, with **3.12 V at the display** and the newly-enabled
+on-screen FPS digits **inverted relative to the eye**. All three pointed somewhere better than
+where they were aimed.
+
+Enabling `SHOW_FPS` produced the numbers, and they are the whole diagnosis:
+
+| Configuration | Measured FPS | Full-frame bus-time ceiling |
+|---|---|---|
+| 10 MHz SPI, synchronous | **10-19**, mostly 10-12 | ~10.8 |
+| 30 MHz SPI, async DMA | **20-22** | ~32 |
+
+The 10 MHz row lands *exactly* on its own bus ceiling, and that is the structural finding:
+**the display pushes near-full frames every update, so it is bus-bound, not compute-bound.**
+`updateChangedAreasOnly(true)` cannot save much because the eye aperture is 43,312 of the 57,600
+pixels on screen (CG-S14's measurement), so "changed" is three quarters of the panel. A 10 to
+15 Hz refresh across a large white field is itself the flicker, which explains why the sclera
+showed it worst, and why lowering the clock made the symptom worse rather than better.
+
+Signal integrity is therefore **ruled out** as the cause, which is exactly what the A/B was for.
+
+### Two upstream values this repo had silently diverged from
+
+Neither divergence had a recorded reason, and both cost frame rate:
+
+| Knob | CyclopsGaze before | Upstream TeensyEyes | Now |
+|---|---|---|---|
+| `SPI_SPEED` | 20 MHz since CG-S1 | 30 MHz | 30 MHz |
+| `asyncUpdates` | `false` on every display | `true` on both | `true` |
+
+Async is the larger win. It hands the framebuffer to DMA so the next frame renders while the
+current one is still on the wire, instead of the loop stalling for the entire transfer.
+`EyeController::renderFrame()` already supported it, returning early on `!isAvailable()` which is
+`!asyncUpdateActive()`. Synchronous updates were costing roughly half the achievable frame rate
+for no benefit anyone had written down.
+
+**Worth generalising:** this repo bundles upstream code but had drifted from upstream's *tuning*
+in two places at once. When a bundled-upstream subsystem underperforms, diff the configuration
+against upstream before theorising about hardware.
+
+### Why the on-screen counter read inverted, and why it moved to serial
+
+`drawNumber(fps, 110, 110)` writes in the panel's coordinate space. The eye artwork additionally
+receives the software X-flip that `EyeController` applies unconditionally for `eyeIndex==0`, the
+pair-mirror convention CG-S6 traced. Text never gets that second flip, so the digits and the eye
+*must* disagree; nothing is misconfigured. Rather than compensate, the counter now prints
+`[CG] FPS display=N nn` once a second: off the artwork, in the right orientation by construction,
+readable over the wire, and no longer costing draw time that biased the number it reports. This
+is a deliberate modification to bundled TeensyEyes, noted in ATTRIBUTION.md.
+
+### Gaze chain observed, and the confidence gate found sitting on the noise floor
+
+The 30 MHz run is the first time this repo has observed its own gaze pipeline since CG-S12
+rewrote it:
+
+```
+[CG] faces=1 rawScore=62 conf=62 gate=PASS | rawX=492 rawY=82
+[CG]   -> raw=0.54,-0.66  target=0.91,0.13  (gain 1.70/1.70 bias 0.00/1.26)
+```
+
+So CG-S12's raw-score gate and per-axis gain/bias are bench-observed, not merely compiled. That
+retires the oldest outstanding item in this log.
+
+It also exposed a tuning problem that only live data could show. Scores oscillate between 60 and
+79 for a stationary face, and land on `gate=REJECT` at exactly 60 repeatedly, so
+`PS_CONF_GATE_DEFAULT = 60` sits **on the noise floor** at bench distance and the eye keeps
+acquiring and dropping the same face. DFRobot's "score >= 60 is valid" is a vendor
+recommendation, not a measurement of this unit at this range and lighting, and CG-S5 adopted it
+from the datasheet rather than from data. Live-tuned to `CONF=50` with `PS_CFG:CONF=50`.
+
+Deliberately **not** written back into `config.h`. One sitting at one distance in one lighting
+condition does not justify changing a documented vendor floor; that needs a sweep. The value is
+RAM-only and reverts on reset, which is what the CG-S13 protocol is for.
+
+That same command **VERIFIED the last unproven `PS_CFG:` path, the ack**: `[DBG] PS_CFG CONF=50`
+in IRIS's exact wording, confirmed by a readback reporting `CONF=50`.
+
+### Status
+
+**CG-S17c is DEPLOYED.** Boot line and `SPI clocks:30000000 2000000` both observed on COM6.
+
+Newly VERIFIED at CG-S16/S17, all previously owed: the `PS_CFG?` readback, the `PS_CFG:` ack, the
+unknown-key guard, `EYE?`/`EYE:next` at one set, the gaze chain end to end, and the frame rate.
+
+Still open:
+- **Whether 20-22 FPS actually clears the flicker.** Operator's call, not reported yet. If it
+  does not, compare the 3.12 V at the display against the **Teensy's own 3.3 V pin**: 3.3 V there
+  means the drop is in the dupont run, 3.12 V there means the onboard regulator is loaded down by
+  display plus SEN0626. Async tearing is also newly possible in this build.
+- `CG_CALIB_RAW` prints two lines per sensor sample and `SHOW_FPS` prints one a second. Both are
+  bench instrumentation and should be turned off before any demo build.
+- Unchanged: facing gate, `LOST_MS`/autoMove resume, NATIVE_H, a second eye rendering, dual-eye
+  step 10.

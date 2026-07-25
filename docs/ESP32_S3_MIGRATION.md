@@ -201,11 +201,26 @@ replays the loop. Regenerate it if these numbers ever need re-deriving.
 **Do not port the project and then discover the frame rate.** Two measurements, in order,
 neither needing a new board.
 
-1. **Get the Teensy baseline: [BENCH_PROTOCOL.md](BENCH_PROTOCOL.md) step 11.** One
-   commented-out line at `src/displays/Display.h:5`, one flash, read the counter off the eye.
-   *Nobody has ever measured this project's frame rate on any board*, so there is currently no
-   baseline for "fast enough" to mean anything against. Cheapest high-value measurement
-   available, and everything in this document is unanchored until it exists.
+1. **DONE at CG-S17 (2026-07-25). The Teensy baseline is 20 to 22 FPS.** Measured on a
+   Teensy 4.1 driving one GC9A01A at **30 MHz SPI with async (DMA) updates**, reported over
+   serial once a second, `nordicBlue`, tracking a live face. Two figures, because the same
+   session measured both configurations:
+
+   | Configuration | Measured | Full-frame bus ceiling |
+   |---|---|---|
+   | 10 MHz SPI, synchronous | **10 to 19 FPS**, mostly 10 to 12 | ~10.8 FPS |
+   | 30 MHz SPI, async DMA | **20 to 22 FPS** | ~32 FPS |
+
+   The first row lands exactly on its bus-time ceiling, which is the important structural
+   finding for this document: **the render pushes near-full frames, so the display is
+   bus-bound, not compute-bound**, because the eye aperture is 43,312 of 57,600 pixels and
+   `updateChangedAreasOnly(true)` has little left to skip. The second row sits below its
+   ceiling, so at 30 MHz the render itself starts to matter, which is where the § 6 table-read
+   analysis finally bites.
+
+   Consequence for the port: **an S3 must clear ~20 FPS, and SPI bandwidth is at least as
+   decisive as cache behaviour.** A backend without an async/DMA path would lose roughly half
+   the frame rate on its own, independent of how well the S3's cache handles the tables.
 2. **Run the real inner loop over the real tables on an S3, record the number.** No sensor, no
    eyelids, no Display abstraction. Report it three ways: tables in flash, tables in SRAM,
    32 B versus 64 B cache lines.

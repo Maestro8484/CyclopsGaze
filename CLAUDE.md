@@ -83,14 +83,23 @@ IRIS-verbatim EyeController — informational, not a warning.
   resume, NATIVE_H 480-vs-640, a second eye actually rendering, dual-eye (step 10) and the frame
   rate (step 11, **never executed on any board**). **docs/BENCH_PROTOCOL.md is still the #1
   priority**, but the list is now much shorter.
-- **CG-S17 is DEPLOYED** (flashed 2026-07-25, boot line and `SPI clocks:10000000` both observed
-  on COM6). It is the flicker A/B: `SPI_SPEED` halved to 10 MHz, and `SHOW_FPS` enabled to get
-  this project's first frame-rate reading on any board.
-- ⚠ **Two answers owed by the operator, unobtainable over serial:** did the flicker change at
-  10 MHz, and what number does the on-screen FPS counter show. Until then the flicker is still
-  undiagnosed (next suspects: 3.3 V at the display's own VCC under load, the CG-S5 failure mode)
-  and BENCH_PROTOCOL step 11 is unexecuted in substance. **Comment `SHOW_FPS` back out** once the
-  figure is recorded.
+- **CG-S17c is DEPLOYED** (flashed 2026-07-25, `SPI clocks:30000000` observed). **The flicker was
+  the frame rate.** First FPS numbers this project has ever had: 10-19 at 10 MHz sync, sitting
+  exactly on the full-frame bus ceiling, and **20-22 at 30 MHz async**. The render pushes
+  near-full frames (aperture is 43,312 of 57,600 px), so it is bus-bound and
+  `updateChangedAreasOnly` saves little. Signal integrity is ruled out. Fixed by adopting
+  upstream's two values, `SPI_SPEED` 30 MHz and `asyncUpdates` true, which this repo had diverged
+  from with no recorded reason.
+- **Gaze chain observed live** at CG-S17c (`faces=1 gate=PASS`, targets computed), so CG-S12's
+  raw-score gate and per-axis gain/bias are finally bench-observed. The `PS_CFG:` ack is VERIFIED
+  too. ⚠ But `PS_CONF_GATE_DEFAULT = 60` **chatters on the noise floor** at bench distance:
+  scores swing 60-79 and REJECT at exactly 60. Live-tuned to `CONF=50` (RAM-only, **not** written
+  to config.h yet, needs more than one sitting to justify).
+- ⚠ **Owed by the operator:** does the flicker actually clear at 20-22 FPS. If not, next is the
+  3.12 V reading at the display, compared against the Teensy's own 3.3 V pin (3.3 there means the
+  drop is in the dupont run; 3.12 there means the regulator is loaded by display plus sensor), and
+  async tearing, which is new in this build. **Turn `SHOW_FPS` and `CG_CALIB_RAW` back off** when
+  bench work ends.
 - Eye artwork: 10 bundled, 13 more upstream a copy away, and 6 MIT Adafruit designs never ported
   to TeensyEyes at all. A disabled eye costs **zero** flash, measured. See docs/EYE_ARTWORK.md
   and the `src/config.h` header comment before touching eye selection.

@@ -66,16 +66,23 @@ void GC9A01A_Display::drawText(int16_t x, int16_t y, char *text) {
 void GC9A01A_Display::update() {
 
 #ifdef SHOW_FPS
-  // A per-display FPS counter
+  // A per-display FPS counter. CG-S17b: reports over SERIAL instead of drawing
+  // onto the eye. Upstream drew it with drawNumber() at (110,110), which has
+  // three problems here: it sits on top of the artwork, it renders in the
+  // panel's own orientation rather than the eye's (the eye receives an extra
+  // software flip for the eyeIndex==0 pair convention that text does not, so
+  // the digits read inverted relative to the eye, observed on the bench at
+  // CG-S17), and drawing it every frame costs time that biases the very number
+  // being measured. Printing once a second measures the render loop without
+  // perturbing it. This is a deliberate divergence from bundled TeensyEyes,
+  // recorded in docs/ATTRIBUTION.md.
+  framesDrawn++;
   if (elapsed >= 1000L) {
     fps = framesDrawn;
     framesDrawn = 0;
     elapsed = 0;
+    Serial.printf("[CG] FPS display=%d %lu\n", displayNum, (unsigned long)fps);
   }
-  display->setTextSize(2);
-  display->setTextColor(WHITE, BLACK);
-  display->drawNumber(fps, 110, 110);
-  framesDrawn++;
 #endif
 
   if (asyncUpdates) {

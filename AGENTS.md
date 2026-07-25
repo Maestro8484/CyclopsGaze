@@ -77,14 +77,20 @@ IRIS-verbatim EyeController — informational, not a warning.
   flashed).
 - **CG-S16 is DEPLOYED**, read on COM6 2026-07-25. Newly VERIFIED: `PS_CFG?` readback (live values
   match every `config.h` seed), the unknown-key guard, `EYE?`/`EYE:next` at `count=1`.
-- ⚠ **Still UNVERIFIED:** the gaze chain in this build (no `faces=` observed), facing gate,
-  `LOST_MS` resume, NATIVE_H, a second eye rendering, dual-eye (step 10), frame rate (step 11,
-  never run on any board). **docs/BENCH_PROTOCOL.md is still the #1 priority.**
-- **CG-S17 is DEPLOYED** (flashed 2026-07-25; boot line and `SPI clocks:10000000` observed on
-  COM6): the flicker A/B, `SPI_SPEED` 20 → 10 MHz plus `SHOW_FPS` enabled.
-- ⚠ **Owed by the operator, not obtainable over serial:** whether the flicker changed, and the
-  on-screen FPS number. Next flicker suspect if 10 MHz did nothing is the 3.3 V rail at the
-  display's own VCC under load. **Comment `SHOW_FPS` back out** once the figure is recorded.
+- ⚠ **Still UNVERIFIED:** facing gate, `LOST_MS`/autoMove resume, NATIVE_H, a second eye actually
+  rendering, dual-eye (step 10). **docs/BENCH_PROTOCOL.md is still the #1 priority**, though the
+  gaze chain, the `PS_CFG:` paths and the frame rate all came off the list at CG-S16/S17.
+- **CG-S17c is DEPLOYED** (flashed 2026-07-25, `SPI clocks:30000000` observed). **The flicker was
+  the frame rate.** First FPS figures ever for this project: 10-19 at 10 MHz sync (exactly the
+  full-frame bus ceiling) and **20-22 at 30 MHz async**. The render is bus-bound because the
+  aperture is 43,312 of 57,600 px. Fixed by adopting upstream's `SPI_SPEED` 30 MHz and
+  `asyncUpdates` true. Signal integrity ruled out.
+- **Gaze chain and the `PS_CFG:` ack are now bench-observed.** ⚠ `PS_CONF_GATE_DEFAULT = 60`
+  chatters on the noise floor at bench range (scores 60-79, REJECT at 60); live-tuned to 50,
+  RAM-only, not yet written to config.h.
+- ⚠ **Owed:** does the flicker clear at 20-22 FPS. If not, compare 3.12 V at the display against
+  the Teensy's own 3.3 V pin, and consider async tearing. **Turn `SHOW_FPS` and `CG_CALIB_RAW`
+  off** when bench work ends.
 - Eye artwork: read docs/EYE_ARTWORK.md and the `src/config.h` header comment before touching eye
   selection. A disabled eye costs zero flash, measured, so bundling is nearly free.
 - ⚠ **Owed:** a head-to-head behavioral comparison of CyclopsGaze's tuning values vs live IRIS's
