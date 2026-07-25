@@ -8,11 +8,9 @@ AI vision camera over UART. Its real job: prove the SEN0626 can stand in, byte-f
 the now-discontinued Useful Sensors *Person Sensor* (SEN-21231) that drives the gaze "soul"
 of the [IRIS](#relation-to-iris) robot face.
 
-<!-- Hero shot: uncomment the line below once docs/media/cyclopsgaze_tracking.jpg exists.
-     Left commented so the public README does not render a broken image.
-     Shot list and file conventions: docs/media/README.md
-![CyclopsGaze tracking a face](docs/media/cyclopsgaze_tracking.jpg)
--->
+<p align="center">
+  <img src="docs/media/CyclopsGaze-hero_photo.jpg" alt="The nordicBlue eye on its round display, with the SEN0626 camera mounted directly below it" width="330">
+</p>
 
 ---
 
@@ -207,13 +205,14 @@ pio device monitor -b 115200        # serial monitor
 Expected serial on boot:
 
 ```
-[CG] CyclopsGaze CG-S15
+[CG] CyclopsGaze CG-S16
 [CG] SEN0626 found at 9600 (attempt 1)
-[CG] EYE sets=2 start=nordicBlue rotate=on every 20000ms
+[CG] EYE sets=1 start=nordicBlue rotate=on every 20000ms
 [CG] faces=1 rawScore=72 conf=72 gate=PASS | rawX=311 rawY=40
 [CG]   -> raw=0.07,-0.03  target=0.12,-0.05  (gain 1.70/1.70 bias 0.00/1.26)
-[CG] EYE set=1 name=hazel (auto)
 ```
+
+`sets=1` is the shipped default, so nothing rotates regardless of the `rotate=on` state.
 
 First-flash walkthrough (enumerate → flash → detect → verify each tracking direction),
 written for someone new to PlatformIO: **[docs/BENCH_PROTOCOL.md](docs/BENCH_PROTOCOL.md)**.
@@ -245,33 +244,72 @@ Values are RAM-only and reset with the board. Once a value proves out on the ben
 back into the matching `*_DEFAULT` constant in `src/config.h` so it survives a power cycle.
 Full reference: [docs/BENCH_PROTOCOL.md](docs/BENCH_PROTOCOL.md) § Live tuning.
 
-### Swapping the eye's look (`EYE:`)
+### Choosing the eye's look
 
-Since CG-S15 the firmware carries two eye sets, **`nordicBlue`** and **`hazel`**, and rotates
-between them every 20 seconds by default. The look is independent of gaze: switching it does
+**Ten eye designs ship with the firmware and exactly one is enabled by default** (`nordicBlue`).
+Changing it is two uncomments in `src/config.h` that have to agree: the eye's `#include` near
+the top of the file, and its row in `eyeDefinitions` further down. That is upstream TeensyEyes'
+own mechanism, adopted rather than reinvented, and the array size is counted by the compiler so
+there is nothing else to edit.
+
+| Eye | Eyeball | Surround | Iris | Pupil range | Character |
+|---|---|---|---|---|---|
+| **nordicBlue** | 125 px | black | 69 px | 0.25 to 0.47 | original artwork, the default |
+| bigBlue | 125 px | black | 85 px | 0.30 to 0.70 | realistic, largest human iris |
+| hazel | 125 px | coloured | 60 px | 0.30 to 0.70 | realistic, small iris, wide pupil |
+| doe | 130 px | black | 95 px | 0.30 to 0.40 | animal, distinct left/right |
+| dragon | 125 px | black | 90 px | 0.10 to 0.20 | vertical slit pupil, black sclera |
+| cat | 125 px | coloured | 90 px | 0.30 to 0.40 | vertical slit pupil, untextured |
+| demon | 125 px | coloured | 110 px | 0.10 to 0.25 | slit pupil, slowly spinning iris |
+| doomRed | 125 px | coloured | 50 px | 0.15 to 0.40 | tiny iris |
+| fish | 120 px | black | 115 px | 0.40 to 0.50 | no eyelids |
+| skull | 120 px | black | 70 px | 0.10 to 0.25 | no eyelids |
+
+Two things that table will save you. **"Surround" is `backColor`**, the ring drawn where the
+eyeball ends but the eyelid aperture continues. `nordicBlue` uses black, so the four coloured
+ones look noticeably unlike it, which is the honest answer to "why does that eye look wrong":
+it is authored differently, not broken. And **a disabled eye costs zero flash**, measured, not
+assumed: the Teensy toolchain garbage-collects tables nothing references, so the nine disabled
+eyes and their lookup tables add nothing to the binary. Details and the measurement are in the
+`src/config.h` header comment.
+
+Upstream ships 23 eyes. Adding one of the 13 not bundled here is a file copy plus the same two
+uncomments, described in `src/config.h` and listed in [docs/ATTRIBUTION.md](docs/ATTRIBUTION.md).
+
+### Switching at runtime (`EYE:`)
+
+Enable two or more rows and the firmware can cycle them, either on a timer or on command. With
+the shipped single-set default nothing rotates. The look is independent of gaze: switching does
 not disturb tracking, and rotation runs whether or not a face is present.
 
 | Command | What it does |
 |---|---|
-| `EYE?` | List the available sets, the current one, and the rotation state |
+| `EYE?` | List the enabled sets, the current one, and the rotation state |
 | `EYE:next` | Advance to the next set now |
-| `EYE:nordicBlue` / `EYE:hazel` | Select by name (case-insensitive). Also turns rotation **off**, so your pick isn't overwritten seconds later |
+| `EYE:<name>` | Select by name (case-insensitive), e.g. `EYE:dragon`. Also turns rotation **off**, so your pick isn't overwritten seconds later |
 | `EYE:AUTO=0` / `EYE:AUTO=1` | Stop / start auto-rotation |
 | `EYE:MS=n` | Rotation interval in ms (floored at 1000; each swap forces a full repaint) |
 
-Defaults live in `src/config.h` (`EYE_ROTATE_MS_DEFAULT`, `EYE_AUTO_ROTATE_DEFAULT`).
+Only *enabled* eyes are reachable over serial. `EYE:` cannot pull in an eye whose `#include` is
+commented out, because its artwork is not in the binary at all. Defaults live in `src/config.h`
+(`EYE_ROTATE_MS_DEFAULT`, `EYE_AUTO_ROTATE_DEFAULT`).
 
 `EYE:` is deliberately a separate command namespace from `PS_CFG:`. The latter is IRIS-verbatim
 down to its ack wording so the two projects' `main.cpp` files stay diffable, and adding eye keys
 to it would break that for a feature IRIS does not have.
 
-**Adding more eye sets** is a config change, not a code change. TeensyEyes ships around 30 eyes
-(`anime`, `cat`, `demon`, `dragon`, `doomRed`, `fizzgig`, `leopard`, `skull`, `snake`, ...).
-Copy the eye's header plus whichever `polarDist_240_<radius>_<irisRadius>_0` table it includes
-into `src/eyes/240x240/`, add the `#include`, and add a row to `eyeDefinitions` in
-`src/config.h`. Every set must share `polar.mapRadius` (240 here), because the gaze position is
-stored in mapRadius units and is not rescaled across a swap. Each additional eye costs roughly
-280 KB of flash, against ~7.3 MB free on a Teensy 4.1.
+**Adding an eye that is not bundled** is a config change, not a code change. Copy the eye's
+header from TeensyEyes plus every `polarDist_240_*` / `disp_240_*` / `noeyelids_*` table its
+header includes (`.h` and `.cpp` both) into `src/eyes/240x240/`, add the `#include`, add a row.
+Every set must share `polar.mapRadius`, which is 240 for all 23 upstream eyes, so in practice
+that constraint cannot be tripped. Each *enabled* eye costs roughly 280 KB of flash against
+~7.3 MB free on a Teensy 4.1; disabled ones cost nothing.
+
+**Making your own eye** is what `nordicBlue` is: upstream ships the generator
+(`resources/eyes/240x240/`, a `config.eye` plus iris/sclera/eyelid PNGs, fed through
+`tablegen.py`), so any iris image can become an eye. Six more MIT-licensed Adafruit designs
+were never ported to TeensyEyes at all, including the Terminator eye. Full survey of what
+exists, what it costs to port, and the licensing: **[docs/EYE_ARTWORK.md](docs/EYE_ARTWORK.md)**.
 
 The `targetN = rawN * gain + bias` shaping model, the confidence-scale choice, and the
 `PS_CFG:` protocol itself are all ported from the parent project's proven tuning, see
@@ -356,15 +394,16 @@ original sensor + gaze layer on top. To be precise about who authored what:
   `src/config.h`.
 - The **nordicBlue** eye, generated from the author's own iris/sclera artwork via
   TeensyEyes' image-conversion tooling.
-- The eye-set rotation and the `EYE:` serial protocol.
+- The eye-set selection, rotation and the `EYE:` serial protocol.
 
 **From TeensyEyes** (MIT © 2022 Chris Miller), bundled here:
 - The eye-rendering engine (`EyeController`), the GC9A01A display driver, and the
   polar/displacement maps (`disp_*`, `polarAngle_*`), several files verbatim,
   `EyeController` modified.
 - The eyelid geometry and the image-conversion tooling used to generate the eye above.
-- The **hazel** eye in its entirety, artwork included, copied verbatim from upstream at CG-S15
-  as a second selectable eye set.
+- **Nine of the ten bundled eyes** in their entirety, artwork included, copied verbatim from
+  upstream: `hazel` at CG-S15, then `bigBlue`, `cat`, `demon`, `doe`, `doomRed`, `dragon`,
+  `fish` and `skull` at CG-S16. By volume of source, the artwork here is mostly his.
 
 File-level breakdown: **[docs/ATTRIBUTION.md](docs/ATTRIBUTION.md)**.
 

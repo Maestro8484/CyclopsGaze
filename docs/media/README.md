@@ -3,17 +3,24 @@
 Photos and video of CyclopsGaze on the bench.
 
 Drop image/video files here and reference them from the top-level [README.md](../../README.md)
-and the docs. The main README has a hero-shot line ready to go at:
+and the docs.
 
-    docs/media/cyclopsgaze_tracking.jpg
+**The hero shot is live** as of CG-S16: `CyclopsGaze-hero_photo.jpg`, a portrait close-up of the
+`nordicBlue` eye with the SEN0626 camera mounted directly beneath it. The README renders it at a
+constrained width because it is 1074x2114; a full-width portrait image is overwhelming on GitHub.
+This replaces the never-existent `cyclopsgaze_tracking.jpg` that the README pointed at from
+CG-S12 to CG-S16 and rendered as a broken image.
 
-That line is currently **commented out** in the README so the public page does not render a
-broken image. Once you add the file, uncomment it (it sits just under the intro paragraph).
+Video lives outside the repo on purpose. The 39-second demo clip and its Resolve project are in
+`C:\Users\SuperMaster\Videos\CyclopsGaze\`, at 32 to 214 MB per render, which does not belong in
+a git history everyone has to clone. Captions and platform copy for it are versioned here in
+[VIDEO_CAPTIONS.md](VIDEO_CAPTIONS.md). If a clip is ever wanted in-repo, export a short
+low-bitrate GIF or MP4 rather than committing a render.
 
-Suggested shots to include:
+Suggested shots still wanted:
 
-- **Hero:** the assembled rig (Teensy + round eye display + SEN0626 camera) with a face in frame
-  and the eye visibly looking toward it.
+- **Hero with a face in frame:** the assembled rig and a person, eye visibly looking toward them.
+  The current hero is the rig alone.
 - **Wiring:** a clear overhead of the wired breadboard/harness, matching the tables in
   [WIRING.md](../WIRING.md).
 - **Serial:** a screenshot of the `[CG] faces=1 … -> tracking x=… y=…` serial output.
