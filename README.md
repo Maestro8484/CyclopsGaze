@@ -233,7 +233,7 @@ change on the next sample:
 
 | Command | What it does | Default |
 |---|---|---|
-| `PS_CFG:CONF=n` | Min DFRobot face score (0–100) to track. `60` = DFRobot's documented validity floor. | `60` |
+| `PS_CFG:CONF=n` | Min DFRobot face score (0–100) to track, strict `>`. DFRobot document `60` as their validity floor; this rig measured that as too strict and settled on `55`. | `55` |
 | `PS_CFG:X_GAIN=f` / `PS_CFG:Y_GAIN=f` | Per-axis gaze range. Sign = direction (negate to un-mirror), magnitude = range. | `1.7` / `1.7` |
 | `PS_CFG:X_BIAS=f` / `PS_CFG:Y_BIAS=f` | Per-axis center offset. `Y_BIAS` compensates for the camera mounting below the eye. | `0.0` / `1.26` |
 | `PS_CFG:LOST_MS=n` | Time with no face before idle wander resumes. | `3000` |

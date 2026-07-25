@@ -1,6 +1,6 @@
 #pragma once
 
-static constexpr char FIRMWARE_VERSION[] = "CG-S17c";
+static constexpr char FIRMWARE_VERSION[] = "CG-S17d";
 
 #include "eyes/eyes.h"
 
@@ -103,25 +103,36 @@ static constexpr char FIRMWARE_VERSION[] = "CG-S17c";
 // psXGain, psYBias, …) so the two code bases stay directly diffable — keeping
 // them from drifting is the entire point of this repo.
 
-// Confidence gate. A face must report box_confidence > psConfGate to be tracked.
-// PS_CFG:CONF=n retunes it live (clamped 0-100). CG-S12 (⚠ UNVERIFIED, re-bench
-// #1 priority): moved 152 -> 60 because
-// SEN0626Sensor now emits the RAW DFRobot score (0-100), not the old 0-255 remap
-// (see SEN0626Sensor.cpp CG-S12 note). 60 IS DFRobot's own documented validity
-// floor -- the SEN0626 wiki setup guide (wiki.dfrobot.com/sen0626/docs/23024)
-// states "a score >=60 is considered valid" and its sample code calls
-// gfd.setFaceDetectThres(60). With strict '>' a raw score of 60 passes and 59
-// does not. This is the SAME effective threshold as the old bench-VERIFIED
-// 152/255 (≈0.60) -- only the scale changed -- but it has NOT been re-observed on
-// the bench since the change. Lower only if bench data shows the vendor floor is
-// too strict for this specific unit (audit 3.7).
+// Confidence gate. A face must report box_confidence > psConfGate to be tracked
+// (main.cpp:234, strict '>'). PS_CFG:CONF=n retunes it live, clamped 0-100.
+// SEN0626Sensor emits the RAW DFRobot score 0-100 since CG-S12, not the old
+// 0-255 remap, so this number is on the vendor's own scale.
+//
+// CG-S17d: 60 -> 55, an operator decision taken from bench data. DFRobot's setup
+// guide (wiki.dfrobot.com/sen0626/docs/23024) says "a score >=60 is considered
+// valid" and their sample calls gfd.setFaceDetectThres(60), which is where 60
+// came from. Observing the wire at CG-S17 showed that floor is too strict for
+// THIS unit at bench range: a stationary face scored 60-79, repeatedly landing
+// on exactly 60, and with a strict '>' every one of those was rejected. The eye
+// kept acquiring and dropping the same face. 55 sits between the vendor floor
+// and the 50 that was live-tuned and seen to hold; it is a judgement call
+// between "trust the datasheet" and "trust one bench sitting", not a measured
+// optimum. If empty-frame noise starts registering as faces, raise it.
+//
+// ⚠ Off-by-one, corrected here: earlier revisions of this comment claimed 60
+// passes and 59 does not. Wrong. With strict '>' the gate value itself FAILS, so
+// 60 rejected a score of exactly 60, which the CG-S17 log shows happening. At 55
+// a score of 56 passes and 55 does not.
 //
 // NOTE the live IRIS install runs CONF=25 (observed on the wire 2026-07-21). That
 // is NOT a tuned SEN0626 value: it is a leftover from the Person Sensor's 0-255
 // scale (~10%) that predates the swap, and IRIS's own S212 source comment flags
-// raising it to 60 as an unmade operator decision. Deliberately NOT adopted here.
+// raising it as an unmade operator decision. Deliberately NOT adopted here, and
+// this 55 is likewise NOT to be pushed into IRIS: it is specific to this rig's
+// distance, lighting and mounting. The servo drop-in in
+// integration/servo_teensy40_base_mount/ deliberately stays at 60 for that reason.
 // See docs/ENGINEERING_LOG.md CG-S13 "IRIS-vs-CyclopsGaze value diff (OPEN)".
-static constexpr uint8_t PS_CONF_GATE_DEFAULT = 60;
+static constexpr uint8_t PS_CONF_GATE_DEFAULT = 55;
 
 // Require the face's is_facing bit (PS_CFG:FACING=0/1). Ported from IRIS for
 // parity; CyclopsGaze had no facing gate at all before CG-S13. Default FALSE and

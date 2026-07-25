@@ -770,3 +770,32 @@ the signal-integrity risk this session just eliminated.
 Housekeeping before any demo build: **turn off `SHOW_FPS` and `CG_CALIB_RAW`.** Note the latter is
 not an FPS problem, roughly 14 serial lines per second against a ~21 Hz loop, so it is about
 clean output rather than speed.
+
+## CG-S17d (2026-07-25) - confidence gate 60 -> 55, and an off-by-one in its own comment
+
+Operator decision, taken from the CG-S17 bench data and written into `config.h` so it survives a
+power cycle. `FIRMWARE_VERSION` CG-S17c → **CG-S17d**.
+
+- **`PS_CONF_GATE_DEFAULT` 60 → 55.** 60 came from DFRobot's setup guide ("a score >= 60 is
+  considered valid") at CG-S5, adopted from the datasheet rather than from data. CG-S17's live
+  logging showed it is too strict for this unit at bench range: a stationary face scored 60 to 79
+  and repeatedly landed on exactly 60, every one of which the gate rejected, so the eye kept
+  acquiring and dropping the same face. 50 was live-tuned and held. **55 is the deliberate middle
+  of the two**, between trusting the vendor floor and trusting a single bench sitting. It is a
+  judgement call, not a measured optimum, and it is recorded as such.
+- ⚠ **Off-by-one corrected in the comment that justified the old value.** It claimed "a raw score
+  of 60 passes and 59 does not". Wrong, and the bench proved it: the comparison is
+  `f.box_confidence > psConfGate` (`main.cpp:234`, strict), so **the gate value itself fails**.
+  At 60 a score of exactly 60 was rejected, which is visible in the CG-S17 log as
+  `rawScore=60 conf=60 gate=REJECT`. At 55, 56 passes and 55 does not. The error dates from
+  CG-S5/CG-S12 and had been carried forward unexamined ever since.
+- **Deliberately not propagated.** The servo drop-in
+  (`integration/servo_teensy40_base_mount/person_sensor.h`) stays at `PS_SERVO_CONF_GATE 60`, and
+  live IRIS stays wherever it is. 55 is specific to this rig's distance, lighting and camera
+  mounting, and CG-S13's warning against copying tuning values between the two projects applies in
+  this direction too, not just the other. README and BENCH_PROTOCOL default tables updated to 55.
+- Status: **DEPLOYED and confirmed on COM6.** `VERSION` returns `[CG] CyclopsGaze CG-S17d` and
+  `PS_CFG?` reports `CONF=55` straight from the compiled default with no runtime override. Frame
+  rate unchanged at 19-20 FPS. ⚠ Whether 55 actually holds a lock better than 60 across distances
+  is **not** established: it was verified as the live value, not validated as the right one. That
+  still wants a short sweep at two or three distances.

@@ -85,9 +85,10 @@ IRIS-verbatim EyeController — informational, not a warning.
   full-frame bus ceiling) and **20-22 at 30 MHz async**. The render is bus-bound because the
   aperture is 43,312 of 57,600 px. Fixed by adopting upstream's `SPI_SPEED` 30 MHz and
   `asyncUpdates` true. Signal integrity ruled out.
-- **Gaze chain and the `PS_CFG:` ack are now bench-observed.** ⚠ `PS_CONF_GATE_DEFAULT = 60`
-  chatters on the noise floor at bench range (scores 60-79, REJECT at 60); live-tuned to 50,
-  RAM-only, not yet written to config.h.
+- **Gaze chain and the `PS_CFG:` ack are now bench-observed.** `PS_CONF_GATE_DEFAULT` is **55**
+  as of CG-S17d: 60 was DFRobot's documented floor and measured too strict here (scores 60-79,
+  and a strict `>` rejects exactly 60). ⚠ Rig-specific, do not push into IRIS; the servo drop-in
+  stays at 60.
 - **Flicker CLOSED** at CG-S17c (operator: "mostly fixed, observable only with close inspection").
   The 3.12 V rail was a red herring. ⚠ Residual artefact at 20-22 FPS against a 32.5 FPS bus
   ceiling; one flash at 40 MHz would say whether it is render-bound. **Turn `SHOW_FPS` and

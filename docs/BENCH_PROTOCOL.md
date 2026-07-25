@@ -52,7 +52,7 @@ reflash. Ported verbatim from IRIS (S141 + S212c), so the same commands drive an
 
 | Command | Effect | Default |
 |---|---|---|
-| `PS_CFG:CONF=n` | confidence gate, raw DFRobot score 0–100 | `60` |
+| `PS_CFG:CONF=n` | confidence gate, raw DFRobot score 0–100, strict `>` so the value itself fails | `55` |
 | `PS_CFG:X_GAIN=f` | X gain: sign = direction, magnitude = range | `1.7` |
 | `PS_CFG:Y_GAIN=f` | Y gain: sign = up/down direction, magnitude = range | `1.7` |
 | `PS_CFG:X_BIAS=f` | X centering offset | `0.0` |

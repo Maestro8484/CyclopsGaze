@@ -91,9 +91,11 @@ IRIS-verbatim EyeController — informational, not a warning.
   from with no recorded reason.
 - **Gaze chain observed live** at CG-S17c (`faces=1 gate=PASS`, targets computed), so CG-S12's
   raw-score gate and per-axis gain/bias are finally bench-observed. The `PS_CFG:` ack is VERIFIED
-  too. ⚠ But `PS_CONF_GATE_DEFAULT = 60` **chatters on the noise floor** at bench distance:
-  scores swing 60-79 and REJECT at exactly 60. Live-tuned to `CONF=50` (RAM-only, **not** written
-  to config.h yet, needs more than one sitting to justify).
+  too. **`PS_CONF_GATE_DEFAULT` is now 55** (CG-S17d, operator decision, verified on the wire).
+  60 was DFRobot's documented floor and measured too strict for this unit: a stationary face
+  scored 60-79 and kept landing on exactly 60, which a strict `>` rejects. 55 splits the vendor
+  floor and the 50 that was seen to hold. ⚠ Rig-specific, **do not push it into IRIS**; the servo
+  drop-in deliberately stays at 60.
 - **Flicker CLOSED** at CG-S17c: operator reports "mostly fixed, observable only with close
   inspection" at 20-22 FPS. The 3.12 V rail was a red herring, not the cause. ⚠ Residual artefact
   remains; a full frame at 30 MHz is 30.7 ms (32.5 FPS ceiling) against 45-50 ms measured, so
