@@ -75,9 +75,14 @@ IRIS-verbatim EyeController — informational, not a warning.
   CG-S12's gate and gain/bias have run on hardware. The eye-set rotation ran too and was reverted
   on taste, not for a fault. **CG-S16 is REPO-ONLY** (ten bundled eyes, one enabled, nothing
   flashed).
-- ⚠ **Still UNVERIFIED on the bench:** `PS_CFG:` parser/ack/readback, facing gate, `LOST_MS`
-  resume, NATIVE_H, dual-eye (step 10), frame rate (step 11, never run on any board).
-  **Re-running docs/BENCH_PROTOCOL.md is still the #1 priority.**
+- **CG-S16 is DEPLOYED**, read on COM6 2026-07-25. Newly VERIFIED: `PS_CFG?` readback (live values
+  match every `config.h` seed), the unknown-key guard, `EYE?`/`EYE:next` at `count=1`.
+- ⚠ **Still UNVERIFIED:** the gaze chain in this build (no `faces=` observed), facing gate,
+  `LOST_MS` resume, NATIVE_H, a second eye rendering, dual-eye (step 10), frame rate (step 11,
+  never run on any board). **docs/BENCH_PROTOCOL.md is still the #1 priority.**
+- ⚠ **Open bench fault:** display jitter/flicker on all-dupont breadboard wiring. Bring-up is
+  clean. Test order: `SPI_SPEED` 20 → 10 MHz, then 3.3 V at the display's own VCC under load, then
+  the never-measured frame rate.
 - Eye artwork: read docs/EYE_ARTWORK.md and the `src/config.h` header comment before touching eye
   selection. A disabled eye costs zero flash, measured, so bundling is nearly free.
 - ⚠ **Owed:** a head-to-head behavioral comparison of CyclopsGaze's tuning values vs live IRIS's

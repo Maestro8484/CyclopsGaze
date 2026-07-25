@@ -887,9 +887,61 @@ board and the source now deliberately disagree: the board runs CG-S15 with two e
 source is CG-S16 with one, and the version string is what tells them apart on the next boot.
 
 Checks that would confirm CG-S16, on the next flash:
-1. Boot line reads `[CG] CyclopsGaze CG-S16` and `EYE sets=1 start=nordicBlue`.
-2. `EYE?` lists one set; `EYE:next` is a no-op; nothing rotates on the 20 s timer.
+1. Boot line reads `[CG] CyclopsGaze CG-S16` and `EYE sets=1 start=nordicBlue`. **PASSED**
+2. `EYE?` lists one set; `EYE:next` is a no-op; nothing rotates on the 20 s timer. **PASSED**
 3. Uncomment a second eye's `#include` and row, reflash, and confirm both the new artwork renders
-   and gaze tracking survives a swap without a jump or freeze.
+   and gaze tracking survives a swap without a jump or freeze. **Not done.**
 4. The still-outstanding items from CG-S13: PS_CFG parse/ack/readback, facing gate, LOST_MS
    resume, plus step 10 (dual-eye) and step 11 (frame rate), neither ever executed.
+   **Readback and the unknown-key guard PASSED; the rest not done.**
+
+### CG-S16 flashed and read on the wire, same session (COM6)
+
+The operator flashed the T4.1 and the USB serial was read directly, so this section is
+observation, not inference. Boot output and command responses are transcribed in CHANGELOG.md
+CG-S16. What it settles:
+
+- **CG-S16 is DEPLOYED.** `VERSION` returns `[CG] CyclopsGaze CG-S16`, matching `config.h`, which
+  is the repo's stated bar for the word.
+- **`PS_CFG?` works and the seeds are being applied.** The dump reads
+  `CONF=60 FACING=0 LOST_MS=3000 X_GAIN=1.70 Y_GAIN=1.70 X_BIAS=0.00 Y_BIAS=1.26 LED=0`, which is
+  every `*_DEFAULT` from `config.h`, so the CG-S13 runtime-variable seeding is correct on
+  hardware. This was the readback that existed specifically because a standalone board has no
+  `ps_config.json`, and it had never been run until now.
+- **The false-ack guard holds.** `PS_CFG:BOGUS=1` answers `[DBG] PS_CFG UNKNOWN key BOGUS` and
+  emits no ack line, which is the S212c behaviour the CG-S13 port was supposed to preserve.
+- **`EYE_SET_COUNT` behaves at 1.** `EYE?` reports `count=1`, and `EYE:next` computes
+  `(0 + 1) % 1 = 0` and reports `set=0 name=nordicBlue (next)` rather than indexing out of range.
+  The CG-S16 array-extent change is sound on hardware, not just at compile time.
+- **The sensor is alive:** `SEN0626 found at 9600 (attempt 1)`, first attempt, so the CG-S3 baud
+  hardening and the UART wiring are both fine.
+
+Not settled, and worth stating plainly: **no `faces=` line was seen**, so nothing here exercises
+the gate, the gaze math, or the eye's motion. Those still rest on the operator's CG-S15 video.
+A `PS_CFG:X_GAIN=` ack was deliberately not sent, to avoid perturbing live tuning while the
+operator was observing the display.
+
+### Open: display jitter/flicker (operator, bench, CG-S16)
+
+Reported this session, undiagnosed, wiring is all dupont jumpers on a breadboard.
+
+Ruled out already: bring-up. The display reports `Init GC9A01A display #0: rotate=0, mirror=1`,
+`useFrameBuffer() OK` and `Success`, and `_t3n::begin` confirms the intended pins and clocks
+(`mosi:11 SCLK:13 CS:10 DC:2 SPI clocks:20000000 2000000`).
+
+Suspects in the order they should be tested, cheapest first:
+
+1. **SPI signal integrity.** `SPI_SPEED` is `20'000'000` (`config.h`). Dupont jumpers on a
+   breadboard are a poor transmission line at 20 MHz: unshielded, no ground return paired with
+   SCK/MOSI, breadboard stray capacitance. Halving to 10 MHz is a one-line change and is the
+   discriminator. Note the CG-S14 render analysis: at 20 MHz a full 115,200-byte frame is already
+   a ~21 FPS bus-time ceiling, which is why `updateChangedAreasOnly(true)` exists
+   (`GC9A01A_Display.cpp:22`), so a lower clock trades refresh headroom for margin.
+2. **The 3.3 V rail, measured at the display's own VCC pin under load**, not at the Teensy pin.
+   This project has already lost a bench session to exactly that distinction: CG-S5 found 2.6 V at
+   the SEN0626 against 3.25 V at the Teensy, caused by a bad connector in the run.
+3. **The refresh rate itself.** If the artefact is uneven or low refresh rather than corrupt
+   pixels, no SPI tuning will touch it. `SHOW_FPS` is still commented out at
+   `src/displays/Display.h:5` and BENCH_PROTOCOL step 11 has **never been executed on any board**,
+   so there is no baseline to judge against. With the rig assembled and flashed, this is the
+   cheapest that measurement will ever be.

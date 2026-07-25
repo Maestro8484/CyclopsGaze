@@ -74,12 +74,18 @@ IRIS-verbatim EyeController — informational, not a warning.
   DFRobot's raw 0-100 scale and the per-axis gain/bias demonstrably track faces. The eye-set
   rotation also ran and was reverted **on taste**, not for a fault, since cycling designs looks
   wrong in a tracking demo.
-- **CG-S16 is REPO-ONLY.** Ten eye designs are bundled with one enabled; nothing was flashed and
-  no eye was observed changing. The board runs CG-S15, the source is CG-S16.
-- ⚠ **Still UNVERIFIED on the bench:** the `PS_CFG:` parser/ack/readback, the facing gate,
-  `LOST_MS`/autoMove resume, NATIVE_H 480-vs-640, dual-eye (BENCH_PROTOCOL step 10) and the frame
-  rate (step 11, never executed on any board). A demo video cannot show any of these.
-  **Re-running docs/BENCH_PROTOCOL.md is still the #1 priority.**
+- **CG-S16 is DEPLOYED** and read on the wire (COM6, 2026-07-25): `VERSION` returns CG-S16,
+  `sets=1 start=nordicBlue`, sensor found at 9600 on attempt 1. Ten eye designs bundled, one
+  enabled. Newly **VERIFIED** there: the `PS_CFG?` readback (live values match every `config.h`
+  seed), the unknown-key guard rejecting a typo with no ack, and `EYE?`/`EYE:next` at `count=1`.
+- ⚠ **Still UNVERIFIED on the bench:** the gaze chain itself in the CG-S16 build (no `faces=`
+  line was observed; tracking rests on the CG-S15 video), the facing gate, `LOST_MS`/autoMove
+  resume, NATIVE_H 480-vs-640, a second eye actually rendering, dual-eye (step 10) and the frame
+  rate (step 11, **never executed on any board**). **docs/BENCH_PROTOCOL.md is still the #1
+  priority**, but the list is now much shorter.
+- ⚠ **Open bench fault:** display jitter/flicker with all-dupont breadboard wiring. Undiagnosed.
+  Bring-up is clean, so test in this order: `SPI_SPEED` 20 MHz → 10 MHz, then 3.3 V measured at
+  the display's own VCC under load (the CG-S5 failure mode), then the unmeasured frame rate.
 - Eye artwork: 10 bundled, 13 more upstream a copy away, and 6 MIT Adafruit designs never ported
   to TeensyEyes at all. A disabled eye costs **zero** flash, measured. See docs/EYE_ARTWORK.md
   and the `src/config.h` header comment before touching eye selection.

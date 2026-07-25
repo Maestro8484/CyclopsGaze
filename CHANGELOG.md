@@ -584,11 +584,56 @@ The state discrepancy this session opened is closed by the operator, not by infe
 - Also recorded, on the operator's instruction: **ChatGPT/Codex sessions on this repo are
   read-only.** The single-eye revert was the operator's own manual edit, not an agent's.
 
-- Status: **CG-S15 DEPLOYED** (operator report; no boot line observed from this session).
-  **CG-S16 is REPO-ONLY** and has not been flashed, so the board and the source now disagree:
-  the board runs CG-S15 with two eye sets, the source is CG-S16 with one. The version string
-  distinguishes them, which is what the bump is for. Both builds clean on Teensy 4.1: single-eye
+### Flashed and bench-observed, same session: CG-S16 is DEPLOYED
+
+The operator flashed the T4.1 and the serial link was read directly on COM6. Observed, verbatim:
+
+```
+[CG] CyclopsGaze CG-S16
+[CG] SEN0626 found at 9600 (attempt 1)
+Init GC9A01A display #0: rotate=0, mirror=1
+_t3n::begin mosi:11 SCLK:13 CS:10 DC:2 SPI clocks:20000000 2000000
+0: useFrameBuffer() OK
+Success
+[CG] EYE sets=1 start=nordicBlue rotate=on every 20000ms
+```
+
+Then, by command:
+
+```
+VERSION          -> [CG] CyclopsGaze CG-S16
+PS_CFG?          -> [CG] PS_CFG_DUMP CONF=60 FACING=0 LOST_MS=3000 X_GAIN=1.70 Y_GAIN=1.70 X_BIAS=0.00 Y_BIAS=1.26 LED=0
+EYE?             -> [CG] EYE_DUMP current=0 name=nordicBlue auto=1 ms=20000 count=1 sets: nordicBlue
+PS_CFG:BOGUS=1   -> [DBG] PS_CFG UNKNOWN key BOGUS
+EYE:next         -> [CG] EYE set=0 name=nordicBlue (next)
+```
+
+**Now VERIFIED, after being owed since CG-S13:**
+- The `PS_CFG?` readback parser works, and **every live value matches its `config.h` seed
+  exactly** (CONF 60, FACING 0, LOST_MS 3000, gains 1.70/1.70, biases 0.00/1.26). The runtime
+  variables are being initialised from the defaults as designed.
+- The unknown-key guard rejects a typo with `UNKNOWN key BOGUS` **and does not ack it**, which is
+  the S212c false-ack behaviour ported at CG-S13.
+- `EYE?` reports `count=1`, and `EYE:next` at one set wraps to itself: a clean no-op rather than
+  an out-of-range index. CG-S16's `EYE_SET_COUNT` and the single-set default both behave.
+- CG-S16 boot line and `sets=1 start=nordicBlue` confirm the shipped default on hardware.
+
+**Still not observed:** no `faces=` line appeared in the read window, so the gaze chain was not
+exercised this session. Tracking still rests on the CG-S15 video. Also untouched: the facing
+gate, `LOST_MS`/autoMove resume, NATIVE_H, dual-eye (step 10) and the frame rate (step 11).
+
+- Status: **CG-S16 is DEPLOYED** (flashed, and the version string observed on COM6, per the
+  repo's own rule). CG-S15 is superseded on the board. Both builds clean on Teensy 4.1: single-eye
   FLASH code 83,836 / data 362,056 / RAM1 free 413,824, and `-DDUAL_EYE` code 84,028 / data
   362,056. Enabling two extra eyes was compile-tested (`bigBlue` + `skull`, data 909,776) to
-  prove the newly copied tables link, then reverted. **No eye has been observed changing on
-  hardware in the CG-S16 build.**
+  prove the newly copied tables link, then reverted. **No second eye has been rendered on
+  hardware**, since the shipped build carries one.
+
+⚠ **New bench observation, open:** the operator reports **jitter/flicker on the display**, with
+all wiring on dupont jumpers on a breadboard. Not diagnosed. The display initialises cleanly
+(`useFrameBuffer() OK`, `Success`) so it is not a bring-up failure. Leading suspect is signal
+integrity: `SPI_SPEED` is 20 MHz over unshielded jumpers with no paired ground return. The cheap
+discriminator is dropping `SPI_SPEED` to 10 MHz and re-observing; if the flicker is unchanged,
+the next suspects are the 3.3 V rail measured at the display's own VCC pin under load (the CG-S5
+failure mode) and then the refresh rate itself, which **has never been measured on any board**
+(`SHOW_FPS`, `src/displays/Display.h:5`, BENCH_PROTOCOL step 11, never executed).
