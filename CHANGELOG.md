@@ -464,3 +464,37 @@ switches between them on a timer or on command.
   § "Eye sets": boot line reads `sets=2 start=nordicBlue`, the look visibly changes ~20 s
   later, `EYE:hazel` switches immediately and reports `auto=0`, `EYE?` lists both, a typo'd
   name changes nothing, and gaze tracking survives a swap without a jump or freeze.
+
+## CG-S16 (2026-07-25) - demo-video captions and post copy (media only, no code)
+
+Wrote the caption set and platform copy for the 39-second demo clip, aimed at YouTube plus
+short-form crossposts. **No source file was touched**; `FIRMWARE_VERSION` stays CG-S15.
+
+- New **[docs/media/VIDEO_CAPTIONS.md](docs/media/VIDEO_CAPTIONS.md)**: three caption drafts
+  (build-log cold open, retention cut, documentary), the reasoning for which one shipped, the
+  YouTube title/description, short-form caption, tags, and Resolve timeline notes (captions
+  belong in the **upper** third here, the rig sits low in the orbit).
+- Shipped `CyclopsGaze_captions_v2.srt` to `C:\Users\SuperMaster\Videos\CyclopsGaze\`, beside
+  the Resolve project. The pre-existing `CyclopsGaze_captions_final.srt` was left untouched,
+  since it is already burned into `..._captioned_1080p.mp4`.
+- Clip measured with `ffprobe`, not assumed: 38.702 s, 1920x1080, ~30 fps, AAC track present.
+- Captions were written against sampled frames rather than the repo's description of the
+  firmware, which mattered twice. The footage shows **`nordicBlue` only**, so no caption claims
+  the CG-S15 two-set rotation; and the operator never leaves frame, so the lose-face-then-wander
+  behavior is worded as a capability rather than as something the viewer is watching happen.
+- Caught while sourcing a price for the captions: **README quotes ~$47 for "a single tracking
+  eye" in its intro, which is the unbuilt ESP32-S3 figure.** docs/BOM.md puts the T4.1 rig in
+  the video at **$63.90**, and README § Path A already says ~$64. The intro number is not wrong
+  in itself but reads as the price of the thing being demonstrated. Left as-is, flagged.
+- Status: media/docs only. No build run, nothing flashed. Firmware status unchanged from CG-S15
+  (**REPO-ONLY**), with the open question below.
+
+⚠ **State discrepancy, unresolved and owed to the operator.** CG-S15 above records REPO-ONLY,
+"nothing was flashed and no eye was observed changing." The demo footage is dated 2026-07-24,
+after that, and shows the rig powered, rendering and visibly redirecting its gaze, and the
+working copy of `src/config.h` carries an uncommitted edit dropping `eyeDefinitions` back to a
+single set with `hazel` commented out. Both point to a flash-and-bench session that never got
+written up. Not recorded as DEPLOYED or VERIFIED here, because this session observed a **video
+file**, not a boot line or a serial log. What would settle it: the operator confirming which
+firmware is on the board, and whether the CG-S12/CG-S13 gate, gain/bias and PS_CFG parser were
+actually exercised. Re-running docs/BENCH_PROTOCOL.md remains the standing #1 priority.

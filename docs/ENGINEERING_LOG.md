@@ -730,3 +730,59 @@ manufacturer before believing a distributor's end-of-life flag.
 REPO-ONLY, docs only. Nothing was built for ESP32-S3, nothing flashed, no frame rate observed.
 The standing #1 priority is unchanged and unaffected: re-run docs/BENCH_PROTOCOL.md on the Teensy
 to close out CG-S12/CG-S13's unverified gate, gain/bias, PS_CFG parser and facing gate.
+
+## CG-S16 (2026-07-25): demo-video captions, and a bench session missing from the log
+
+Media work, no source touched, `FIRMWARE_VERSION` unchanged at CG-S15. Caption drafts, the
+shipped cue list and the platform copy live in **[media/VIDEO_CAPTIONS.md](media/VIDEO_CAPTIONS.md)**.
+Recorded here are the two findings that outlive the video.
+
+### The footage documents a bench state the repo does not
+
+`C:\Users\SuperMaster\Videos\CyclopsGaze\` holds a 38.702 s clip dated 2026-07-24 (measured with
+`ffprobe`; 1920x1080, ~30 fps, AAC) plus stabilized, reframed and already-captioned renders. Frames
+sampled out of it show the rig powered and rendering: one round GC9A01A running `nordicBlue`, the
+SEN0626 mounted directly below the display on a purple stand, a Teensy on a breadboard beside it,
+autonomous blinks and pupil dilation, and the iris staying turned toward the operator through a
+full handheld orbit.
+
+CG-S15 (2026-07-21) records REPO-ONLY, "nothing was flashed and no eye was observed changing."
+The clip postdates that by three days. Separately, the working copy of `src/config.h` carries an
+uncommitted edit taking `eyeDefinitions` from `<1,2>` back to `<1,1>` with `{hazel::eye}`
+commented out, i.e. somebody deliberately reduced the build to a single eye set, which is a
+choice you make at a bench and not at a keyboard.
+
+**Deliberately not upgraded to DEPLOYED or VERIFIED.** What was observed this session is a video
+file, not a boot line and not a serial log. A clip cannot establish which firmware is on the
+board, and CG-S12's raw-score gate, CG-S13's PS_CFG parser and facing gate are exactly the things
+a video cannot show. The status words mean flashed and flashed-plus-observed, and neither was
+observed here.
+
+Owed, and cheap: the operator states which firmware is on the board and whether that session
+exercised the gate / gain / bias / PS_CFG path. If it did, CG-S15's status line and the CG-S12
+re-bench debt both change materially, and the #1 priority may be partly discharged already
+without anyone having written it down.
+
+### Captions had to be written against the footage, not against the firmware docs
+
+Worth keeping because it will recur every time this project produces media. Two caption claims
+that the repo's own documentation would have supported were false about the clip:
+
+1. CG-S15 added a second eye set and 20-second rotation, and the README documents it. The clip
+   shows `nordicBlue` for all 39 s, consistent with the uncommitted single-set `config.h`. A
+   caption asserting a rotating look would have been contradicted on screen.
+2. Idle-wander-then-relock (BENCH_PROTOCOL step 8) is real firmware behavior, but the operator
+   never leaves frame in this clip, so a caption timed over the footage would read as a promise
+   the viewer never sees paid. Shipped as a capability statement instead.
+
+Also caught while pricing a caption: README's intro says "around $47 in parts for a single
+tracking eye," which is [BOM.md](BOM.md)'s ESP32-S3 row for a board nothing has ever been built
+on. The rig on screen is the T4.1 build at $63.90, and README § Path A already quotes ~$64. Not
+corrected, since the $47 line is arguably about the cheapest route rather than the demo rig, but
+any public copy should quote $64 for anything showing this hardware.
+
+### Status
+
+Media and docs only. No build run, nothing flashed, no serial observed. Firmware status stands at
+CG-S15 **REPO-ONLY**, now with the open question above attached to it. Re-running
+docs/BENCH_PROTOCOL.md remains the #1 priority.
