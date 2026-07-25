@@ -86,5 +86,52 @@ extras (never called by consumers) and don't break the contract.
 - **`NATIVE_H` = 480 is assumed.** DFRobot documents the X range (0–640) but not Y. Confirm
   the true max `face_y` via the raw serial logging (`CG_CALIB_RAW`), see BENCH_PROTOCOL
   step 6.
-- **No LED control register exists** (confirmed against DFRobot's map + library).
-  `enableLED()` is a no-op stub; to disable the sensor's onboard LEDs, cover them physically.
+- **`NATIVE_H` note above is the only unconfirmed protocol item.** The LED question below is
+  settled.
+
+## The onboard LEDs cannot be turned off in firmware
+
+Asked again at CG-S17d and re-verified against DFRobot's current library header
+(`DFRobot_GestureFaceDetection.h`) rather than the CG-S8 note. **This is the complete writable
+register set on the device:**
+
+| Holding register | Purpose |
+|---|---|
+| `0x00` | device address |
+| `0x01` | baud rate |
+| `0x02` | parity / stop bits |
+| `0x03` | face detection threshold |
+| `0x04` | face score threshold |
+| `0x05` | gesture score threshold |
+
+Read-only input registers are PID, VID, HW version, SW version, face number, face X, face Y,
+face score, gesture type, gesture score. **There is no LED register, no brightness control and no
+indicator enable anywhere in the device.** `SEN0626Sensor::enableLED(bool) {}` is therefore
+correctly a no-op stub: it exists only to satisfy the Person Sensor method surface.
+
+DFRobot document exactly two indicators
+([wiki](https://wiki.dfrobot.com/SKU_SEN0626_Gesture_and_Face_Detection_Module)): a single white
+**head-shoulder light**, lit steadily while a face is detected and extinguished when the person
+leaves, and an **RGB gesture light** (blue Good, green OK, red Stop, yellow Victory, purple
+Call-me). They document **no IR emitter and no night-vision illumination**. Absence from the
+datasheet is not proof of absence, and the CG-S10 bench note in [WIRING.md](WIRING.md) refers to
+an "IR-adjacent" component near the lens, so if this matters: point a phone camera at the board
+in a dark room with no face in frame and look for a violet-white glow from anything that is not
+one of those two LEDs.
+
+To actually darken the board, in order of preference:
+
+1. **Hide the main board.** CG-S10 bench-found the camera assembly attaches by ribbon and tape,
+   not solder, and detection worked with only the camera plus ribbon in place. If the indicators
+   are on the Gravity board rather than the camera sub-board, relocating the camera removes them
+   from view with no modification. Confirm which board they sit on first, and re-verify detection
+   afterwards, since CG-S10 left post-separation register behaviour open.
+2. **Cover them.** Opaque tape or paint. Crude, immediate, reversible, and the right answer for a
+   filming session.
+3. **Desolder or lift them.** Permanent, guaranteed, and the usual risk to the board.
+
+⚠ **Do not reach for register `0x04` for this.** Raising the sensor's internal face score
+threshold would make the head-shoulder light fire less often, but it also stops the sensor
+reporting sub-threshold faces at all, which fights the software gate in `config.h`
+(`PS_CONF_GATE_DEFAULT`, 55 since CG-S17d) that needs to see scores in that band. It cannot
+switch the light off for a genuinely detected face either.
