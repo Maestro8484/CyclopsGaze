@@ -78,11 +78,10 @@ IRIS-verbatim EyeController — informational, not a warning.
   `sets=1 start=nordicBlue`, sensor found at 9600 on attempt 1. Ten eye designs bundled, one
   enabled. Newly **VERIFIED** there: the `PS_CFG?` readback (live values match every `config.h`
   seed), the unknown-key guard rejecting a typo with no ack, and `EYE?`/`EYE:next` at `count=1`.
-- ⚠ **Still UNVERIFIED on the bench:** the gaze chain itself in the CG-S16 build (no `faces=`
-  line was observed; tracking rests on the CG-S15 video), the facing gate, `LOST_MS`/autoMove
-  resume, NATIVE_H 480-vs-640, a second eye actually rendering, dual-eye (step 10) and the frame
-  rate (step 11, **never executed on any board**). **docs/BENCH_PROTOCOL.md is still the #1
-  priority**, but the list is now much shorter.
+- ⚠ **Still UNVERIFIED on the bench:** the facing gate, `LOST_MS`/autoMove resume, NATIVE_H
+  480-vs-640, a second eye actually rendering, and dual-eye (step 10). **docs/BENCH_PROTOCOL.md
+  is still the #1 priority**, but the list is much shorter now: the gaze chain, all the `PS_CFG:`
+  paths and the frame rate (step 11) were all closed at CG-S16/S17, per the entries below.
 - **CG-S17c is DEPLOYED** (flashed 2026-07-25, `SPI clocks:30000000` observed). **The flicker was
   the frame rate.** First FPS numbers this project has ever had: 10-19 at 10 MHz sync, sitting
   exactly on the full-frame bus ceiling, and **20-22 at 30 MHz async**. The render pushes
