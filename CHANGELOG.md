@@ -465,10 +465,88 @@ switches between them on a timer or on command.
   later, `EYE:hazel` switches immediately and reports `auto=0`, `EYE?` lists both, a typo'd
   name changes nothing, and gaze tracking survives a swap without a jump or freeze.
 
-## CG-S16 (2026-07-25) - demo-video captions and post copy (media only, no code)
+## CG-S16 (2026-07-25) - ten selectable eyes, hazel diagnosed, demo-video captions
 
-Wrote the caption set and platform copy for the 39-second demo clip, aimed at YouTube plus
-short-form crossposts. **No source file was touched**; `FIRMWARE_VERSION` stays CG-S15.
+Three things: the eye catalogue went from 2 designs to 10 with one-line selection, the
+operator's "hazel looks off" was traced to authored parameters rather than a bug, and the
+39-second demo clip got its captions. `FIRMWARE_VERSION` CG-S15 → **CG-S16**.
+
+### Eye artwork: 10 bundled, 1 enabled, disabled ones cost nothing
+
+- Bundled 8 more of Chris Miller's eyes (`bigBlue`, `cat`, `demon`, `doe`, `doomRed`, `dragon`,
+  `fish`, `skull`) plus the 7 `polarDist_240_*`, 2 `disp_240_*` and `noeyelids_120` tables they
+  need. With `nordicBlue` and `hazel` that is **10 selectable designs**. All verified
+  byte-identical to upstream by `diff`.
+- **Prior art, not invention:** selection is upstream's own mechanism, a block of `#include`
+  lines with a matching block of array rows, commented in pairs. Upstream's `src/config.h` does
+  exactly this with 23 eyes. Adopted verbatim in shape.
+- **A disabled eye costs zero flash, measured not assumed.** Controlled A/B with one variable:
+  `hazel.h` included but its row commented out gave FLASH code 83,836 / data 362,056, and
+  commenting the `#include` too gave *the same two figures*. Both equal the CG-S13 baseline from
+  before any second eye existed. The Teensy builder passes `-fdata-sections` and
+  `-Wl,--gc-sections`, so unreferenced tables are dropped at link. Bundling is therefore nearly
+  free: 8 headers and 10 table `.cpp` files added ~3.4 MB of repo and 0 bytes of firmware.
+- **The CG-S15 `mapRadius` constraint is not binding.** All 23 upstream eyes set
+  `polar.mapRadius` to 240, checked positionally in every header, same as `nordicBlue`. Nothing
+  in the catalogue can trip it. `config.h` and the README said otherwise and are corrected.
+  Eyeball `radius` may differ freely between sets (120/125/130 all bundled) because
+  `EyeController` reads `definition->radius` per frame and caches nothing derived from it.
+- **The hand-maintained array count is gone.** `eyeDefinitions` is now an array of
+  `std::array<EyeDefinition, N>` whose extent the compiler counts, exposed as
+  `EYE_SET_COUNT` via `std::size`. Enabling an eye is two uncomments and no arithmetic.
+  main.cpp's 10 `.at(i)` / `.size()` call sites moved to `[i]` / `EYE_SET_COUNT`.
+- **A C++17 trap found and avoided, worth recording.** The first attempt used class template
+  argument deduction (`std::array eyeDefinitions{ std::array{nordicBlue::eye} }`). With two or
+  more rows that deduces correctly; with exactly **one** row it matches the *copy* deduction
+  candidate and collapses to the inner array, so `eyeDefinitions[i][0]` stops compiling. It
+  would have worked for every multi-eye build and broken only the shipped single-eye default.
+- Default ships `nordicBlue` alone, matching the operator's own revert: with one set nothing
+  rotates, which is what a face-tracking demo wants. Rotation and `EYE:` are untouched and
+  activate as soon as a second row is uncommented.
+- New **[docs/EYE_ARTWORK.md](docs/EYE_ARTWORK.md)**: a survey of where eye art comes from,
+  researched from source repos rather than recalled. There is **no third-party ecosystem** of
+  TeensyEyes eyes; the only public fork (`MichaelMeissner/TeensyEyes`) has an identical eye list.
+  But **six MIT-licensed Adafruit designs were never ported to TeensyEyes at all**
+  (`terminatorEye`, `goatEye`, `naugaEye`, `noScleraEye`, `defaultEye` from `Uncanny_Eyes`, and
+  `reflection` from `M4_Eyes`), and the doc records the real blocker: `config.eye` is two
+  incompatible schemas, upstream's nested/hex-colour/PNG-lid form versus M4_Eyes'
+  flat/RGB-triple/`eyelidIndex` form. Also records that the generator's input is just an iris
+  image, which is how `nordicBlue` exists.
+- Attribution rebalanced honestly: nine of ten bundled eyes are Chris Miller's artwork, so by
+  volume the art here is mostly his. docs/ATTRIBUTION.md and the README say so, and list the 13
+  upstream eyes deliberately not bundled.
+
+### hazel does not look wrong, it looks different (operator bench report)
+
+The operator reported hazel looking "off" versus `nordicBlue` when it was the active set. Traced
+without touching hardware, and **nothing is broken**:
+
+- `hazel.h` and every table it uses are byte-identical to upstream (`diff`).
+- `backColor` and `squint` are consumed by *identical expressions* in CyclopsGaze's modified
+  `EyeController` and upstream's, so the 305-line divergence is not implicated.
+- It is authored differently: `backColor` 35138 where `nordicBlue` uses 0, so a coloured rim is
+  painted where the eyeball ends but the eyelid aperture continues (`EyeController.h:435`); iris
+  radius 60 against 69; pupil reaching 0.70 of that smaller iris against 0.47; and half the
+  squint. Recorded per-eye for all ten in the `config.h` header comment and the README table, so
+  the next person picking an eye can predict this instead of re-diagnosing it.
+
+### Demo-video captions (media)
+
+- New **[docs/media/VIDEO_CAPTIONS.md](docs/media/VIDEO_CAPTIONS.md)**: three caption drafts for
+  the 39-second clip (build-log cold open, retention cut, documentary), why one shipped, the
+  YouTube title/description, short-form caption, tags and Resolve notes (captions belong in the
+  **upper** third here, the rig sits low in the orbit).
+- Shipped `CyclopsGaze_captions_v2.srt` beside the Resolve project. The existing
+  `CyclopsGaze_captions_final.srt` was left alone, already burned into a render.
+- Clip measured with `ffprobe`: 38.702 s, 1920x1080, ~30 fps, AAC present.
+- Captions written against sampled frames, not the firmware docs, which mattered: the footage
+  shows `nordicBlue` only, so nothing claims eye rotation, and the operator never leaves frame,
+  so lose-face-then-wander is worded as a capability rather than an on-screen event.
+- Hero photo committed and the README hero image restored, fixing the broken-image defect
+  CG-S14 recorded. It points at the real filename now and renders at a constrained width because
+  the photo is a 1074x2114 portrait.
+- Caught while sourcing a price: README's intro `$47` is [BOM.md](docs/BOM.md)'s **unbuilt**
+  ESP32-S3 row. The rig on screen is the T4.1 build at **$63.90**.
 
 - New **[docs/media/VIDEO_CAPTIONS.md](docs/media/VIDEO_CAPTIONS.md)**: three caption drafts
   (build-log cold open, retention cut, documentary), the reasoning for which one shipped, the
@@ -486,15 +564,31 @@ short-form crossposts. **No source file was touched**; `FIRMWARE_VERSION` stays 
   eye" in its intro, which is the unbuilt ESP32-S3 figure.** docs/BOM.md puts the T4.1 rig in
   the video at **$63.90**, and README § Path A already says ~$64. The intro number is not wrong
   in itself but reads as the price of the thing being demonstrated. Left as-is, flagged.
-- Status: media/docs only. No build run, nothing flashed. Firmware status unchanged from CG-S15
-  (**REPO-ONLY**), with the open question below.
+### CG-S15 was flashed. Status corrected on the operator's own report.
 
-⚠ **State discrepancy, unresolved and owed to the operator.** CG-S15 above records REPO-ONLY,
-"nothing was flashed and no eye was observed changing." The demo footage is dated 2026-07-24,
-after that, and shows the rig powered, rendering and visibly redirecting its gaze, and the
-working copy of `src/config.h` carries an uncommitted edit dropping `eyeDefinitions` back to a
-single set with `hazel` commented out. Both point to a flash-and-bench session that never got
-written up. Not recorded as DEPLOYED or VERIFIED here, because this session observed a **video
-file**, not a boot line or a serial log. What would settle it: the operator confirming which
-firmware is on the board, and whether the CG-S12/CG-S13 gate, gain/bias and PS_CFG parser were
-actually exercised. Re-running docs/BENCH_PROTOCOL.md remains the standing #1 priority.
+The state discrepancy this session opened is closed by the operator, not by inference:
+
+- **CG-S15 is DEPLOYED.** The operator flashed the firmware carrying the serial eye-set change
+  to the board. That build also carries CG-S12's raw-score gate and per-axis gain/bias and
+  CG-S13's PS_CFG parser, so all of it has now run on hardware.
+- Gaze tracking was observed: the operator shot the 2026-07-24 demo clip with it, and the eye
+  visibly holds on them through a full orbit. So the CG-S12 gate at 60 on the raw 0-100 scale
+  does pass real faces, and the per-axis gain/bias give usable travel in the correct direction.
+- **The eye-set rotation was flashed, seen, and rejected on taste.** The operator reverted
+  `eyeDefinitions` to a single set by hand because cycling looks wrong in a face-tracking demo.
+  That revert is the shipped default now, deliberately.
+- **Still not confirmed, so still owed:** the `PS_CFG:` parser and readback, the facing gate,
+  `LOST_MS`/autoMove resume, NATIVE_H, the dual-eye path (BENCH_PROTOCOL step 10), and the frame
+  rate (step 11). A video cannot show any of them. Re-running docs/BENCH_PROTOCOL.md stays the
+  #1 priority, but it is now a shorter list than CG-S15 implied.
+- Also recorded, on the operator's instruction: **ChatGPT/Codex sessions on this repo are
+  read-only.** The single-eye revert was the operator's own manual edit, not an agent's.
+
+- Status: **CG-S15 DEPLOYED** (operator report; no boot line observed from this session).
+  **CG-S16 is REPO-ONLY** and has not been flashed, so the board and the source now disagree:
+  the board runs CG-S15 with two eye sets, the source is CG-S16 with one. The version string
+  distinguishes them, which is what the bump is for. Both builds clean on Teensy 4.1: single-eye
+  FLASH code 83,836 / data 362,056 / RAM1 free 413,824, and `-DDUAL_EYE` code 84,028 / data
+  362,056. Enabling two extra eyes was compile-tested (`bigBlue` + `skull`, data 909,776) to
+  prove the newly copied tables link, then reverted. **No eye has been observed changing on
+  hardware in the CG-S16 build.**

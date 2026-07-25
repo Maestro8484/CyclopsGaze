@@ -16,16 +16,26 @@ file-level split, verified by diffing against pristine `github.com/chrismiller/T
 | `src/config.h` | **Mostly original**: tunables + this project's wiring/eye setup |
 | `nordicBlue` eye **texture** (`nordicBlue.h` iris/sclera data) | **Original art**: generated from the author's own iris/sclera image via TeensyEyes' image-conversion tooling |
 | `nordicBlue.h` **eyelid geometry** | TeensyEyes, identical to its stock 240×240 eyelid shape |
-| `hazel.h` (CG-S15) | **TeensyEyes, verbatim.** Chris Miller's eye in its entirety, artwork included. Copied unmodified from upstream as a second selectable eye set. Not original to this project in any part. |
-| `polarDist_240_125_69_0.*`, `polarDist_240_125_60_0.*`, `disp_240_125.*`, `polarAngle_240.*` | TeensyEyes tooling, generated maps (verbatim / for a chosen iris radius). The `_60_0` variant was copied in at CG-S15 because `hazel` uses iris radius 60. |
+| `hazel.h` (CG-S15), and `bigBlue.h`, `cat.h`, `demon.h`, `doe.h`, `doomRed.h`, `dragon.h`, `fish.h`, `skull.h` (CG-S16) | **TeensyEyes, verbatim.** Nine of Chris Miller's eyes in their entirety, artwork included, copied unmodified from upstream as selectable eye sets. Not original to this project in any part. Verified byte-identical to upstream by `diff` at CG-S16. |
+| `polarDist_240_*.*`, `disp_240_1{20,25,30}.*`, `polarAngle_240.*`, `noeyelids_120.*` | TeensyEyes tooling, generated maps, verbatim. One `polarDist` variant per iris radius: `_69_0` is for `nordicBlue`, the other eight came in with the eyes that need them (CG-S15, CG-S16). |
 | `src/eyes/EyeController.h` | TeensyEyes, **modified** (~305 of ~700 lines changed) |
 | `src/eyes/eyes.h`, `src/displays/*` | TeensyEyes, largely / entirely **verbatim** |
 
-In plain terms: the eye-rendering engine, display driver, eyelid/polar maps, and the entire
-`hazel` eye are Chris Miller's (MIT; much of it copied byte-for-byte). The SEN0626
-face-tracking driver, the gaze-integration layer, the eye-set rotation and `EYE:` protocol,
-and the `nordicBlue` eye's texture art are the CyclopsGaze author's original work. The combined work is distributed under MIT, preserving Chris Miller's
-copyright and license for his portions.
+In plain terms: the eye-rendering engine, display driver, eyelid/polar maps, and **nine of the
+ten bundled eyes** are Chris Miller's (MIT; much of it copied byte-for-byte). By volume of
+source, the artwork in this repo is overwhelmingly his. The SEN0626 face-tracking driver, the
+gaze-integration layer, the eye-set selection and `EYE:` protocol, and the `nordicBlue` eye's
+texture art are the CyclopsGaze author's original work. The combined work is distributed under
+MIT, preserving Chris Miller's copyright and license for his portions.
+
+### Bundled eyes, and the ones deliberately not bundled
+
+Upstream ships 23 eyes for 240x240. Ten are bundled here (`nordicBlue` plus the nine above),
+chosen for spread of character rather than completeness. The 13 not bundled are `anime`,
+`blueFlame1`, `blueFlame2`, `brown`, `doomSpiral`, `firebox`, `fizzgig`, `flame`, `hypnoRed`,
+`leopard`, `newt`, `spikes` and `toonstripe`. Adding one is a copy plus two uncomments, and
+costs nothing in flash until enabled: see the header comment in `src/config.h`. Anyone doing
+that is copying Chris Miller's artwork and should keep this attribution accurate.
 
 ## Bundled in this repo (`src/`)
 

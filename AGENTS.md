@@ -1,6 +1,6 @@
-# CLAUDE.md — CyclopsGaze session anchor
+# AGENTS.md — CyclopsGaze session anchor
 
-Working context for Claude Code (or any AI agent) sessions on this repo. Read this first.
+Working context for Codex (or any AI agent) sessions on this repo. Read this first.
 
 ## What this project is
 
@@ -11,7 +11,9 @@ whole point of the `SEN0626Sensor` driver is that it presents the *exact* `perso
 struct and method surface IRIS already consumes. See [README.md](README.md) for the full framing.
 
 - **Local repo is the source of truth.** GitHub (`Maestro8484/CyclopsGaze`) is the public mirror.
-- Parent project **IRIS-Robot-Face is private and READ-ONLY** from here — never write to it.
+- Parent project **IRIS-Robot-Face is private and READ-ONLY** from here, never write to it.
+- **Codex / ChatGPT sessions on this repo are READ-ONLY** (operator, 2026-07-25). Audit, review
+  and report; do not edit, commit or push. Code changes go through Claude Code or the operator.
 
 ## Ground-truth discipline (non-negotiable)
 
@@ -69,20 +71,15 @@ IRIS-verbatim EyeController — informational, not a warning.
 - **The two repos are in sync as of CG-S13** — verified by diff, not memory: `SEN0626Sensor.{h,cpp}`
   are byte-identical (comments aside), and IRIS's gaze code is frozen at S212c. If a future session
   is told "sync from IRIS", **diff first** — the answer may again be "already synced".
-- **CG-S15 is DEPLOYED** (operator report, CG-S16). It was flashed and filmed tracking on
-  2026-07-24, which retires the old "CG-S12 has never run on hardware" caveat: the gate on
-  DFRobot's raw 0-100 scale and the per-axis gain/bias demonstrably track faces. The eye-set
-  rotation also ran and was reverted **on taste**, not for a fault, since cycling designs looks
-  wrong in a tracking demo.
-- **CG-S16 is REPO-ONLY.** Ten eye designs are bundled with one enabled; nothing was flashed and
-  no eye was observed changing. The board runs CG-S15, the source is CG-S16.
-- ⚠ **Still UNVERIFIED on the bench:** the `PS_CFG:` parser/ack/readback, the facing gate,
-  `LOST_MS`/autoMove resume, NATIVE_H 480-vs-640, dual-eye (BENCH_PROTOCOL step 10) and the frame
-  rate (step 11, never executed on any board). A demo video cannot show any of these.
+- **CG-S15 is DEPLOYED** (operator report, CG-S16): flashed and filmed tracking 2026-07-24, so
+  CG-S12's gate and gain/bias have run on hardware. The eye-set rotation ran too and was reverted
+  on taste, not for a fault. **CG-S16 is REPO-ONLY** (ten bundled eyes, one enabled, nothing
+  flashed).
+- ⚠ **Still UNVERIFIED on the bench:** `PS_CFG:` parser/ack/readback, facing gate, `LOST_MS`
+  resume, NATIVE_H, dual-eye (step 10), frame rate (step 11, never run on any board).
   **Re-running docs/BENCH_PROTOCOL.md is still the #1 priority.**
-- Eye artwork: 10 bundled, 13 more upstream a copy away, and 6 MIT Adafruit designs never ported
-  to TeensyEyes at all. A disabled eye costs **zero** flash, measured. See docs/EYE_ARTWORK.md
-  and the `src/config.h` header comment before touching eye selection.
+- Eye artwork: read docs/EYE_ARTWORK.md and the `src/config.h` header comment before touching eye
+  selection. A disabled eye costs zero flash, measured, so bundling is nearly free.
 - ⚠ **Owed:** a head-to-head behavioral comparison of CyclopsGaze's tuning values vs live IRIS's
   (docs/IRIS_INTEGRATION.md § "The tuning-value gap"). IRIS's are untuned fallbacks, not proven
   numbers — do not adopt them on the assumption that "live = better".

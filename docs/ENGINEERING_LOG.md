@@ -737,6 +737,33 @@ Media work, no source touched, `FIRMWARE_VERSION` unchanged at CG-S15. Caption d
 shipped cue list and the platform copy live in **[media/VIDEO_CAPTIONS.md](media/VIDEO_CAPTIONS.md)**.
 Recorded here are the two findings that outlive the video.
 
+### Resolved: CG-S15 was flashed, and the eye rotation was rejected on taste
+
+The discrepancy described below was opened by this session and closed by the operator in the
+same session. Their words, which outrank every inference here: they flashed the firmware
+carrying the serial eye-set change, and they then reverted `eyeDefinitions` to a single set by
+hand because cycling eye designs looks wrong in a face-tracking demo. Also: **ChatGPT/Codex
+sessions on this repo are read-only**, so the uncommitted edit was the operator's, not an
+agent's.
+
+What that establishes, and what it does not:
+
+- **CG-S15 is DEPLOYED.** That binary necessarily carries CG-S12's raw-score gate and per-axis
+  gain/bias and CG-S13's PS_CFG parser, since they are all in the same source lineage. The
+  long-standing "CG-S12 has never run on hardware" caveat is retired.
+- Tracking behaviour was observed by the operator while filming. So the gate at 60 on DFRobot's
+  raw 0-100 scale does admit real faces, and the gain/bias produce usable travel in the right
+  direction. Those two CG-S12 changes are behaviourally sound.
+- The rotation mechanism ran on hardware and was rejected as a presentation choice, not as a
+  fault. Worth separating: a feature can work and still be wrong for the demo.
+- **Not established, and still owed:** `PS_CFG:` parse/ack/readback, the facing gate,
+  `LOST_MS`/autoMove resume, NATIVE_H 480-vs-640, dual-eye (step 10) and frame rate (step 11).
+  None of these are visible in a video. What would confirm each is unchanged in
+  BENCH_PROTOCOL.md.
+
+The rest of this section is kept as written because the reasoning is still the right default:
+absent the operator's statement, a video file is not evidence of a firmware version.
+
 ### The footage documents a bench state the repo does not
 
 `C:\Users\SuperMaster\Videos\CyclopsGaze\` holds a 38.702 s clip dated 2026-07-24 (measured with
@@ -781,8 +808,88 @@ on. The rig on screen is the T4.1 build at $63.90, and README § Path A already 
 corrected, since the $47 line is arguably about the cheapest route rather than the demo rig, but
 any public copy should quote $64 for anything showing this hardware.
 
+### Eye artwork: what a disabled eye actually costs, measured
+
+The eye catalogue went from 2 designs to 10 this session. The design question was whether
+bundling artwork nobody has enabled is expensive. It is not, and the number is worth keeping so
+nobody re-derives it.
+
+Controlled A/B, one variable, everything else identical:
+
+| Build | FLASH code | FLASH data |
+|---|---|---|
+| CG-S13 baseline, before any second eye existed | 82,876 | 362,056 |
+| CG-S15, `nordicBlue` + `hazel` both enabled | 119,468 | 646,808 |
+| `hazel.h` included, its row commented out | 83,836 | **362,056** |
+| `hazel.h` also commented out | 83,836 | **362,056** |
+| `bigBlue` + `skull` additionally enabled (test, reverted) | 83,964 | 909,776 |
+
+The last two rows are the finding: including an eye header without referencing it costs
+**nothing at all**, not one byte, and both figures land exactly on the pre-hazel baseline. The
+Teensy Arduino builder passes `-fdata-sections` and `-Wl,--gc-sections`
+(`~/.platformio/platforms/teensy/builder/frameworks/arduino.py:103,121`), so unreferenced const
+tables never reach the binary. Consequences: bundling 8 eye headers and 10 table `.cpp` files
+added ~3.4 MB of repo and 0 bytes of firmware; upstream's advice to comment the `#include` as
+well is belt-and-braces on this toolchain rather than load-bearing; and the failure mode that
+actually matters is the reverse one, a row uncommented without its include, which is a compile
+error naming the eye.
+
+Two constraints were checked against source rather than believed:
+
+- **`mapRadius` is not a real restriction.** CG-S15 documented "all sets must share
+  `polar.mapRadius`" as a live hazard. All 23 upstream eyes set it positionally to 240, verified
+  by extracting the polar initializer from every header. Nothing in the catalogue can violate it.
+  The warning stays for anyone *authoring* an eye, but it cannot be tripped by selecting one.
+- **Eyeball `radius` may differ between sets.** 120, 125 and 130 are all bundled.
+  `EyeController` reads `definition->radius` per frame (`EyeController.h:233`) and
+  `updateDefinition()` caches nothing derived from it, so a swap picks it up immediately.
+
+### A C++17 deduction trap that would have shipped broken
+
+Removing the hand-maintained array count looked like a job for class template argument
+deduction: `std::array eyeDefinitions{ std::array{nordicBlue::eye} }`. It does not work, and it
+fails in the worst possible direction. With one row, the braced initializer matches std::array's
+implicit **copy** deduction candidate rather than the element guide, so the outer array collapses
+into the inner one and `eyeDefinitions[i][0]` no longer compiles. With two or more rows it
+deduces correctly. So it would have compiled for every multi-eye configuration and broken only
+the shipped single-eye default. Fixed by using a plain array of `std::array`, whose extent the
+compiler counts anyway, surfaced as `constexpr size_t EYE_SET_COUNT{std::size(eyeDefinitions)}`.
+
+### "hazel looks off": authored differently, not broken
+
+Operator bench report this session. Diagnosed without hardware, and the conclusion is that
+nothing is wrong with the code:
+
+- `hazel.h`, `polarDist_240_125_60_0.*`, `disp_240_125.*` and `polarAngle_240.*` are all
+  byte-identical to upstream (`diff`), so the CG-S15 copy is not corrupt.
+- `backColor` and `squint` are read by *identical expressions* in CyclopsGaze's `EyeController`
+  and upstream's (lines 235/321/435 here, 260/370/507 there). The 305-line divergence between
+  the two engines does not touch either. This engine renders hazel the way upstream would.
+- Four authored parameters differ from `nordicBlue`: `backColor` 35138 versus 0, iris radius 60
+  versus 69, pupil range 0.30-0.70 versus 0.25-0.47, squint 0.5 versus 1.0. `backColor` is
+  painted where the eyeball ends but the eyelid aperture continues, so hazel draws a coloured rim
+  where `nordicBlue` draws black. Cross-check on the decoding: upstream's own `config.eye` for
+  hazel writes `"backColor": "0x8942"`, and Adafruit's M4_Eyes format writes comparable values as
+  RGB triples like `[140,40,20]`, consistent with 0x8942 being a dark rust rather than anything
+  neutral.
+- Which of the four the operator is reacting to is not established, because nothing here was
+  observed on the display. All four are now documented per-eye for all ten designs in the
+  `config.h` header comment and the README table, which is the durable fix: the next person
+  picking an eye can predict the look instead of re-running this diagnosis.
+
 ### Status
 
-Media and docs only. No build run, nothing flashed, no serial observed. Firmware status stands at
-CG-S15 **REPO-ONLY**, now with the open question above attached to it. Re-running
-docs/BENCH_PROTOCOL.md remains the #1 priority.
+`FIRMWARE_VERSION` CG-S15 → **CG-S16**. Both builds clean on Teensy 4.1: single-eye code 83,836
+/ data 362,056 / RAM1 free 413,824, and `-DDUAL_EYE` code 84,028 / data 362,056.
+
+**CG-S16 is REPO-ONLY. Nothing was flashed this session and no eye was observed changing.** The
+board and the source now deliberately disagree: the board runs CG-S15 with two eye sets, the
+source is CG-S16 with one, and the version string is what tells them apart on the next boot.
+
+Checks that would confirm CG-S16, on the next flash:
+1. Boot line reads `[CG] CyclopsGaze CG-S16` and `EYE sets=1 start=nordicBlue`.
+2. `EYE?` lists one set; `EYE:next` is a no-op; nothing rotates on the 20 s timer.
+3. Uncomment a second eye's `#include` and row, reflash, and confirm both the new artwork renders
+   and gaze tracking survives a swap without a jump or freeze.
+4. The still-outstanding items from CG-S13: PS_CFG parse/ack/readback, facing gate, LOST_MS
+   resume, plus step 10 (dual-eye) and step 11 (frame rate), neither ever executed.
