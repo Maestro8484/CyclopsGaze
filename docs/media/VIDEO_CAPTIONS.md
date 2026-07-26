@@ -155,15 +155,22 @@ phrase into plain language.
 | File | Size | Purpose |
 |---|---|---|
 | `CyclopsGaze_captions_v3.srt` | 1 KB | Import into Resolve, or upload to YouTube as a caption track |
-| `CyclopsGaze_v3_captioned_1080p.mp4` | 25.2 MB | Captions burned in, audio kept. For social, where muted autoplay needs baked captions |
-| `CyclopsGaze_v3_captioned_720p_web.mp4` | 2.4 MB | 1280 wide, no audio. Small enough to drop straight into GitHub |
+| `CyclopsGaze_v3_captioned_bottom_1080p.mp4` | 23.5 MB | Captions burned in bottom centre, audio kept. For social, where muted autoplay needs baked captions |
+| `CyclopsGaze_v3_captioned_bottom_720p_web.mp4` | 2.3 MB | 1280 wide, no audio. Small enough to drop straight into GitHub |
 
-⚠ On the burned-in versions: the caption block renders **mid-left, clear of the eye**, not in the
-upper third. `ffmpeg`'s `subtitles` filter ignored the `Alignment` and `MarginV` overrides in this
-build, verified by rendering both variants and comparing frames. It is legible and does not cover
-the subject, so it is fine as a preview, but **do the final placement in Resolve**, which has
-proper control. Pin it to the upper third: the rig sits low through most of the orbit, and a centre
-9:16 crop keeps the eye in the upper half.
+**Captions sit bottom centre** (operator preference, CG-S17d). White Arial bold with a 3 px black
+outline, `MarginV=55`, which reads cleanly over both the white desk and the dark background behind
+the rig, and stays clear of the eye since the eye sits high in frame through the whole orbit.
+
+⚠ One `ffmpeg` gotcha worth recording, since it cost two wasted renders. **`BorderStyle=4` (opaque
+caption box) breaks positioning** in this build: with it set, `Alignment` and `MarginV` are both
+ignored and the block lands mid-left regardless. Verified by rendering variants and comparing
+frames, not guessed. Using `BorderStyle=1` with `Outline=3` instead restores normal behaviour, and
+libass's default alignment is already bottom centre so no `Alignment` override is needed at all.
+
+Also: when spot-checking a frame, put `-ss` **after** `-i`. Input seeking rebases timestamps to
+zero, so the `subtitles` filter finds no active cue and renders a caption-free frame, which looks
+exactly like a styling failure.
 
 ### Recommended route
 
@@ -173,6 +180,26 @@ video host, and a single canonical URL means one place to fix if the edit change
 1. **YouTube** is the canonical copy. Upload the Resolve export, attach
    `CyclopsGaze_captions_v3.srt` as the caption track rather than relying on auto-captions, and use
    the description above.
+
+### Resolve: import the SRT, do not rebuild the project
+
+**Import the subtitle track into the existing project.** A Resolve project is not a file that can
+be authored externally: it lives in Resolve's own project database (nothing in
+`C:\Users\SuperMaster\Videos\CyclopsGaze\` but media and SRTs, checked), and the only portable form
+is a `.drp` export, which is a proprietary format. So there is no "hand you a finished project
+file" option.
+
+Route: `File > Import > Subtitle`, pick `CyclopsGaze_captions_v3.srt`. It lands as its own subtitle
+track, fully editable, and Resolve's default subtitle position is already bottom centre. Style once
+on the track in the Inspector and every cue follows.
+
+The alternative, if this ever needs automating: **Resolve's scripting API is installed on this
+machine** (`DaVinciResolveScript.py` under
+`C:\ProgramData\Blackmagic Design\DaVinci Resolve\Support\Developer\Scripting\Modules\`, Resolve
+21.0.2.4). A Python script can create a timeline, import the clip and attach subtitles, but it
+needs Resolve running with Preferences > System > General > External scripting set to Local. That is
+strictly more moving parts than three clicks, so it is only worth it for a repeatable pipeline
+across many clips.
 2. **GitHub README** gets a thumbnail image linking to the YouTube URL, placed just under the hero
    photo. GitHub does render an uploaded MP4 if you drag it into an issue or release and use the
    resulting attachment URL, and the 2.4 MB web file exists for that, but a YouTube link survives
