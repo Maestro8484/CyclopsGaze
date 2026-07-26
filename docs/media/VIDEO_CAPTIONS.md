@@ -155,22 +155,34 @@ phrase into plain language.
 | File | Size | Purpose |
 |---|---|---|
 | `CyclopsGaze_captions_v3.srt` | 1 KB | Import into Resolve, or upload to YouTube as a caption track |
-| `CyclopsGaze_v3_captioned_bottom_1080p.mp4` | 23.5 MB | Captions burned in bottom centre, audio kept. For social, where muted autoplay needs baked captions |
-| `CyclopsGaze_v3_captioned_bottom_720p_web.mp4` | 2.3 MB | 1280 wide, no audio. Small enough to drop straight into GitHub |
+| `CyclopsGaze_reframed_stabilized_1080p_captioned_1080p.mp4` | 24.1 MB | Captions burned in bottom centre, audio kept. For social, where muted autoplay needs baked captions |
+| `CyclopsGaze_reframed_stabilized_1080p_captioned_web.mp4` | 2.3 MB | 1280 wide, no audio. Small enough to drop straight into GitHub |
+| `CyclopsGaze_captions_v3.burn.ass` | 2 KB | Generated style file, kept for inspection |
 
-**Captions sit bottom centre** (operator preference, CG-S17d). White Arial bold with a 3 px black
-outline, `MarginV=55`, which reads cleanly over both the white desk and the dark background behind
-the rig, and stays clear of the eye since the eye sits high in frame through the whole orbit.
+Produced by `C:\Users\SuperMaster\.claude\demo-video-kit\burn.py`, which is the reusable version of
+this whole job (driven by `/demo-video`). **Captions sit bottom centre**, 48 px off the bottom edge,
+44 px Arial bold with a 4 px black outline. That reads over both the white desk and the dark
+background, and stays clear of the eye, which sits high in frame throughout the orbit.
 
-⚠ One `ffmpeg` gotcha worth recording, since it cost two wasted renders. **`BorderStyle=4` (opaque
-caption box) breaks positioning** in this build: with it set, `Alignment` and `MarginV` are both
-ignored and the block lands mid-left regardless. Verified by rendering variants and comparing
-frames, not guessed. Using `BorderStyle=1` with `Outline=3` instead restores normal behaviour, and
-libass's default alignment is already bottom centre so no `Alignment` override is needed at all.
+⚠ **Three `ffmpeg` traps, each of which cost a render, all now encoded in the kit:**
+
+1. **Pixel values handed to `force_style` are wrong by ~3.75x.** ffmpeg's SRT to ASS conversion
+   writes `PlayResX: 384 / PlayResY: 288` (confirmed by converting and reading the file), and libass
+   scales every script unit by `video_height / PlayResY`. So `MarginV=55` rendered ~206 px off the
+   bottom, which is the "still a quarter up from the bottom" the operator spotted, and `FontSize=24`
+   rendered ~90 px tall. The kit converts to ASS, rewrites `PlayRes` to 1920x1080, and writes the
+   style line itself, so its numbers are literal pixels.
+2. **`BorderStyle=4` (opaque caption box) breaks positioning outright.** With it set, `Alignment`
+   and `MarginV` are both ignored and the block lands mid-frame-left. Verified by rendering variants
+   and comparing frames. Use `BorderStyle=1` with an outline.
+3. **An absolute Windows path cannot go inside a filtergraph value.** ffmpeg splits filter options
+   on `:` and reads the drive-letter colon as a separator, failing with a misleading
+   `Unable to parse option value ... as image size`. Escaping does not survive a non-shell argv, so
+   run ffmpeg with `cwd` set to the subtitle's folder and pass a bare filename.
 
 Also: when spot-checking a frame, put `-ss` **after** `-i`. Input seeking rebases timestamps to
-zero, so the `subtitles` filter finds no active cue and renders a caption-free frame, which looks
-exactly like a styling failure.
+zero, so the subtitle filter finds no active cue and renders a caption-free frame, which looks
+exactly like a styling failure and sends you chasing the wrong thing.
 
 ### Recommended route
 
