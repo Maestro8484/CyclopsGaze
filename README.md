@@ -346,9 +346,11 @@ is called "done" until VERIFIED.
 
 ## Relation to IRIS
 
-**IRIS** is a private tabletop robot-face project (LLM assistant + animated eyes + head-pan
-servos). CyclopsGaze is IRIS's gaze-sensor module, developed in this separate public repo so
-the sensor swap could be proven in isolation without touching the live robot.
+**[IRIS](https://github.com/Maestro8484/IRIS)** is a tabletop robot-face project (LLM assistant +
+animated eyes + head-pan servos) that runs entirely on hardware you own. CyclopsGaze is IRIS's
+gaze-sensor module, developed in this separate repo so the sensor swap could be proven in isolation
+without touching the live robot. IRIS's firmware working repo is private; the project itself is
+public at the link above.
 
 - CyclopsGaze validates the SEN0626 → gaze pipeline standalone.
 - The validated driver (`src/sensors/SEN0626Sensor.{h,cpp}`) and the ready-to-copy adapters

@@ -1,0 +1,52 @@
+1
+00:00:00,200 --> 00:00:03,200
+An animated eye is easy.
+Making it look at you is not.
+
+2
+00:00:03,400 --> 00:00:06,600
+Most of these wander on a timer.
+This one is watching me.
+
+3
+00:00:06,800 --> 00:00:10,000
+A tiny AI camera under the eye
+finds my face on its own.
+
+4
+00:00:10,200 --> 00:00:13,200
+No Pi. No PC. No wifi.
+
+5
+00:00:13,400 --> 00:00:16,800
+The camera sends the face position
+over two wires.
+
+6
+00:00:17,000 --> 00:00:20,400
+A Teensy points the eye
+at whatever the camera found.
+
+7
+00:00:20,600 --> 00:00:24,000
+The blinking and the pupil
+are its own idea.
+
+8
+00:00:24,200 --> 00:00:27,400
+About $64 of parts.
+A second eye is under $12.
+
+9
+00:00:27,600 --> 00:00:31,000
+None of this was the point.
+
+10
+00:00:31,200 --> 00:00:34,600
+The sensor my robot face used
+got discontinued.
+
+11
+00:00:34,800 --> 00:00:38,500
+That face is called IRIS.
+It is running this right now.

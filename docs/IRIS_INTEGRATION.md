@@ -3,8 +3,9 @@
 How the CyclopsGaze SEN0626 driver drops into the parent IRIS robot-face project, what the
 real swap uncovered, and the one deliberate way the IRIS copy diverges from this repo.
 
-IRIS is a private project; this doc covers only what's needed to understand and reproduce the
-drop-in. The ready-to-copy adapter files live in [`../integration/`](../integration/).
+IRIS is public at [github.com/Maestro8484/IRIS](https://github.com/Maestro8484/IRIS), but its
+firmware working repo is private, so this doc covers only what's needed to understand and reproduce
+the drop-in. The ready-to-copy adapter files live in [`../integration/`](../integration/).
 
 ## The goal
 
