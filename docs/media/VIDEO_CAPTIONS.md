@@ -158,7 +158,57 @@ phrase into plain language.
 2. I gave an animatronic eye a camera so it looks at you
 3. Face-tracking animatronic eye: Teensy 4.1 and a $15 AI camera
 
-### YouTube description
+### YouTube description, long version (the "about this video" text)
+
+    Most animatronic eyes wander on a timer. This one has a camera under it, so it
+    looks at whoever is actually in the room.
+
+    Everything happens on the device. A small AI camera does the face detection
+    itself and sends the position over two wires to a Teensy 4.1, which points a
+    1.28 inch round LCD at whatever it found. No Raspberry Pi. No PC. No wifi.
+    Nothing phones home, and nothing breaks when your internet does.
+
+    The blinking, the pupil dilation and the small idle drifts are the eye's own
+    business. Only the direction it looks comes from the camera. That split is why
+    it reads as alive without much cleverness behind it: the gaze is honest, and
+    everything else is just good animation running at about 20 frames a second.
+
+    Around $64 of parts for what you see here. Extra round displays run under $12,
+    so the second eye is the cheap one. The firmware carries ten different eye
+    designs and you pick one by uncommenting a line. Tracking range, sensitivity
+    and how far the eye travels all tune over a serial cable while it is running,
+    with no reflashing.
+
+    Now the part that is not in the video.
+
+    I did not build this because I wanted an eye watching me while I work. I built
+    it because a part went out of production.
+
+    My robot face, IRIS, uses a small face sensor to drive its gaze. That sensor
+    was discontinued. A project meant to be rebuilt by other people cannot depend
+    on something nobody can buy, so I needed a replacement that spoke the old
+    part's language exactly, or every piece of code that talked to it would have
+    to be rewritten.
+
+    That is what this is. Same data structure, same function calls, same behaviour.
+    Drop it in and the robot does not notice it was replaced. It has been running
+    in IRIS ever since.
+
+    IRIS, the robot face this was built for:
+    https://github.com/Maestro8484/IRIS
+
+    CyclopsGaze, this project. Firmware, wiring diagrams, a sourced parts list and
+    the full build log, including everything that went wrong:
+    https://github.com/Maestro8484/CyclopsGaze
+
+    Hardware: Teensy 4.1, a 1.28 inch 240x240 GC9A01A round LCD, and a DFRobot
+    SEN0626 vision camera doing the face detection on its own processor.
+
+    The eye rendering engine is TeensyEyes by Chris Miller, MIT licensed, which
+    descends from Adafruit's Uncanny Eyes. The iris and sclera artwork in this
+    particular eye is mine.
+
+### YouTube description, short version
 
     An animatronic eye that tracks a real face instead of wandering on a timer.
 
