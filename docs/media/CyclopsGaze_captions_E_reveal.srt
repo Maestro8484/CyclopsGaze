@@ -1,0 +1,50 @@
+1
+00:00:00,200 --> 00:00:03,400
+The sensor that made my robot
+look at people got discontinued.
+
+2
+00:00:03,600 --> 00:00:06,800
+So I built the replacement
+and tested it on one eye.
+
+3
+00:00:07,000 --> 00:00:10,200
+This is that test.
+
+4
+00:00:10,400 --> 00:00:13,600
+A tiny AI camera sits under the eye
+and finds my face.
+
+5
+00:00:13,800 --> 00:00:17,000
+It works out where the face is
+and sends that over two wires.
+
+6
+00:00:17,200 --> 00:00:20,400
+No Pi. No PC. No wifi.
+
+7
+00:00:20,600 --> 00:00:23,800
+The eye just looks where it is told.
+
+8
+00:00:24,000 --> 00:00:27,200
+Blinking and pupil size
+are its own business.
+
+9
+00:00:27,400 --> 00:00:30,600
+About $64 of parts.
+A second eye is under $12.
+
+10
+00:00:30,800 --> 00:00:34,200
+The robot it was built for
+is called IRIS.
+
+11
+00:00:34,400 --> 00:00:38,500
+It is using this right now.

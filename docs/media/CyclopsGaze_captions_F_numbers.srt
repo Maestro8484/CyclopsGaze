@@ -1,0 +1,49 @@
+1
+00:00:00,200 --> 00:00:03,200
+One eye. One camera.
+One microcontroller.
+
+2
+00:00:03,400 --> 00:00:06,600
+About $64 of parts.
+
+3
+00:00:06,800 --> 00:00:10,000
+The camera finds a face
+and reports where it is.
+
+4
+00:00:10,200 --> 00:00:13,400
+240 by 240 pixels of eye,
+redrawn about 20 times a second.
+
+5
+00:00:13,600 --> 00:00:16,800
+Two wires carry the face position.
+
+6
+00:00:17,000 --> 00:00:20,200
+No Pi. No PC. No wifi.
+
+7
+00:00:20,400 --> 00:00:23,600
+The detection runs on the camera,
+not on a computer.
+
+8
+00:00:23,800 --> 00:00:27,000
+A second eye costs under $12.
+
+9
+00:00:27,200 --> 00:00:30,400
+The blinks are not scripted.
+
+10
+00:00:30,600 --> 00:00:34,000
+It replaced a sensor
+that went out of production.
+
+11
+00:00:34,200 --> 00:00:38,500
+It runs the eyes on my robot face,
+IRIS.

@@ -65,6 +65,60 @@ Why it is built this way:
   imagine building two, and generic 1.28 inch GC9A01A modules really are about $8.60
   ([BOM.md](../BOM.md)).
 
+## Alternate cuts, E through H
+
+Four structurally different sets, not rewordings of D. All validated against the clip: none run
+past 38.50 s, none overlap, none exceed two lines, none exceed 20 characters per second.
+
+### E, reveal first (`CyclopsGaze_captions_E_reveal.srt`), 11 cues, 13.0 char/s
+
+Inverts D. Opens on the discontinued sensor and makes the eye the answer rather than the payoff.
+Cue 3 is a three-word beat, "This is that test", which hands the clip back to the visuals.
+
+**Trade:** the strongest thing in the video, that it is watching a person, is not stated until cue
+4. On a platform where the first two seconds decide everything, that is a real cost. Best suited to
+YouTube, where a viewer has already chosen to watch.
+
+### F, numbers forward (`CyclopsGaze_captions_F_numbers.srt`), 11 cues, 11.6 char/s
+
+For the build-curious. Leads with a parts count, then costs, resolution and frame rate.
+
+Cue 4 is newly possible: **"240 by 240 pixels of eye, redrawn about 20 times a second."** The frame
+rate was unmeasurable until CG-S17 executed BENCH_PROTOCOL step 11, so no earlier draft could
+honestly say it. 19-22 FPS measured, so "about 20" is fair.
+
+**Trade:** specifications persuade people who already care and bounce people who do not. It never
+makes an emotional claim.
+
+### G, sparse (`CyclopsGaze_captions_G_sparse.srt`), 5 cues, 4.8 char/s
+
+Five cues with long holds, closest to a title card treatment. Lets the orbit and the gaze do the
+work, since the footage is genuinely good enough to carry it.
+
+**Trade:** it leaves the whole story on the floor. No mechanism, no camera explanation, no IRIS
+context beyond one closing line. Strongest as an Instagram or Bluesky post where a written caption
+sits beside the video and carries the detail.
+
+### H, vertical first (`CyclopsGaze_captions_H_vertical.srt`), 13 cues, 8.6 char/s
+
+Written for a 9:16 crop: 13 short cues, most lines under 25 characters, so nothing wraps badly in a
+narrow safe area. Faster cut, more beats, each one small. The eye stays in the upper half through
+the whole orbit, so a centre crop keeps the subject.
+
+**Trade:** on a 16:9 timeline it feels choppy and under-written. This is a crop-specific cut, not a
+general improvement.
+
+### Which is weakest
+
+**G.** It is the most tempting because it looks confident and takes the least effort to read, but a
+39 second clip with five captions asks the footage to answer questions it cannot: why the eye moves,
+what is under it, why any of it exists. It only works with supporting text beside it, which means it
+is not really a captioned video, it is a video with a post attached.
+
+**D remains the recommendation for a single general-purpose cut.** E is the one worth testing against
+it, since the two differ in structure rather than wording and would give a clean read on whether
+problem-first or trick-first performs better with this audience.
+
 ## Earlier drafts, kept for the record
 
 **Draft A, build-log voice**, 11 cues, cold open on "The eye is following my face", spec beats

@@ -1,0 +1,21 @@
+1
+00:00:00,500 --> 00:00:06,000
+It is looking at me.
+
+2
+00:00:07,000 --> 00:00:13,000
+Not on a timer.
+There is a camera under it.
+
+3
+00:00:14,000 --> 00:00:20,500
+No Pi. No PC. No wifi.
+
+4
+00:00:21,500 --> 00:00:28,500
+About $64 of parts.
+
+5
+00:00:29,500 --> 00:00:38,500
+Built to replace a discontinued sensor
+in my robot face, IRIS.
