@@ -223,9 +223,46 @@ Eye engine is TeensyEyes by Chris Miller (MIT), out of Adafruit's Uncanny Eyes. 
 
 ### Tags
 
-    animatronics, animatronic eye, face tracking, teensy, teensy 4.1, platformio,
-    uncanny eyes, teensyeyes, gc9a01a, dfrobot, sen0626, halloween prop, cosplay,
-    puppet, robot face, diy electronics, embedded, arduino
+22 tags, 329 characters, inside YouTube's 500 character limit.
+
+```
+animatronic eye, animatronic eyes, animatronics, face tracking, person sensor, useful sensors person sensor, SEN-21231, person sensor replacement, sen0626, dfrobot sen0626, teensy 4.1, teensyeyes, uncanny eyes, gc9a01a, round lcd display, robot eye, halloween prop, cosplay prop, prop making, diy electronics, platformio, arduino
+```
+
+Four groups, deliberately. **The discontinued-part group is the valuable one**: `person sensor`,
+`useful sensors person sensor`, `SEN-21231`, `person sensor replacement`. Someone searching those
+owns a dead part or a project that depends on one, so they arrive with exactly the problem this
+video solves. An earlier version of this list named the DFRobot part but not the one people are
+looking for, which was the wrong way round.
+
+The rest: topic terms as a broad net, part names for people already building something similar
+(`uncanny eyes` matters, it is the lineage name most of this audience knows), and seasonal use-case
+terms that will do most of their work in autumn.
+
+Dropped from the earlier list: `puppet`, `robot face`, `embedded`, and the bare `teensy` and
+`dfrobot`. Bare brand words compete with a whole catalogue and rarely surface one video, and
+`robot face` pulls toward IRIS rather than this build.
+
+Tags carry far less weight than the title, the first two lines of the description, and the
+thumbnail. They mainly catch part numbers and misspellings, which is exactly why the `SEN-21231`
+group earns its place.
+
+### Upload settings
+
+- **Title:** "Most animatronic eyes just wander. This one looks at you." The opening line of the
+  description doubles as the title; the contrast does the work without clickbait. Shorter
+  alternates if mobile truncation matters: "This animatronic eye looks back at you", or
+  "I built an animatronic eye that watches you".
+- **Made for kids: NO.** The setting is a COPPA declaration about whether content is *directed to*
+  children, not whether children could watch. A technical demo about UART wiring, parts cost and a
+  discontinued component is aimed at adult makers. Marking it for kids would also disable comments,
+  cards, end screens and notifications, which is costly for a video whose job is sending people to
+  two repos.
+- **Age restriction:** off. Nothing here warrants it.
+- **Altered content disclosure:** no. Real footage of real hardware. The stabilisation pass does
+  not count; that disclosure covers synthetic or materially altered depictions of real events.
+- **Captions:** upload `CyclopsGaze_captions_v3.srt` as a real caption track rather than relying on
+  auto-captions.
 
 ---
 
